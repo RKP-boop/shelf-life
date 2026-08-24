@@ -1,0 +1,15 @@
+[
+  {"fg":"text/on-olive-primary",   "bg":"surface/canvas", "minPx":14, "use":"titles and body on canvas"},
+  {"fg":"text/on-olive-secondary", "bg":"surface/canvas", "minPx":14, "use":"secondary body on canvas"},
+  {"fg":"text/on-deep-tertiary",   "bg":"surface/deep",   "minPx":12, "use":"small print on deep surfaces ONLY (D12)"},
+  {"fg":"text/on-olive-secondary", "bg":"surface/deep",   "minPx":12, "use":"stat labels on deep card"},
+  {"fg":"text/on-olive-primary",   "bg":"surface/deep",   "minPx":14, "use":"bottom bar and deep-olive button labels"},
+  {"fg":"text/on-light-primary",   "bg":"surface/frosted","minPx":16, "use":"card titles"},
+  {"fg":"text/on-light-secondary", "bg":"surface/frosted","minPx":14, "use":"card secondary text"},
+  {"fg":"text/on-light-primary",   "bg":"surface/opaque", "minPx":16, "use":"opaque frosted surfaces"},
+  {"fg":"text/on-light-secondary", "bg":"surface/opaque", "minPx":14, "use":"opaque frosted secondary"},
+  {"fg":"state/amber-text",        "bg":"state/amber-bg", "minPx":12, "use":"amber freshness badge (D11)"},
+  {"fg":"state/red-text",          "bg":"state/red-bg",   "minPx":12, "use":"red freshness badge"},
+  {"fg":"info/text",               "bg":"info/bg",        "minPx":14, "use":"informational strip"},
+  {"fg":"text/on-light-primary",   "bg":"surface/field",  "minPx":16, "use":"cream pill button and form fields"}
+]
