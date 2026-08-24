@@ -65,3 +65,62 @@ Recorded so the plan and the file agree:
 4. **Nav labels are 12 px, not 11.** 11 px broke the `Label/Medium-12` token and sat under the 12 px floor. `Inventory` still fits in a 68 dp cell at 12 px.
 5. **No translucent glass border.** At 92% opacity a `rgba(white, 0.2)` border is invisible. Depth is carried by the drop shadow instead.
 6. **Real SVG vector nav icons** rather than the planned ellipse placeholders.
+
+---
+
+## Screen frames (page `Screens` = `1:2`)
+
+4 × 4 grid, 512 dp horizontal pitch, 1055 dp vertical pitch. Every frame is exactly 412 × 915.
+
+| Screen | Node ID | Screen | Node ID |
+|---|---|---|---|
+| 01 Value prop | `11:83` | 09 Barcode not found | `11:91` |
+| 02 Auth | `11:84` | 10 Add by hand | `11:92` |
+| 03 Home empty | `11:85` | 11 Inventory | `11:93` |
+| 04 Home hub | `11:86` | 12 Item detail | `11:94` |
+| 05 Scan chooser | `11:87` | 13 Recipes | `11:95` |
+| 06 Receipt camera | `11:88` | 14 Recipe detail | `11:96` |
+| 07 Reading receipt | `11:89` | 15 Shopping list | `11:97` |
+| 08 Review confirm | `11:90` | 16 Profile | `11:98` |
+
+## Icon components (21)
+
+`Icon/arrow-left` `9:35` · `chevron-right` `9:38` · `search` `9:41` · `plus` `9:44` · `minus` `9:47` · `check` `9:50` · `close` `9:53` · `pencil` `9:56` · `camera` `9:59` · `barcode` `9:62` · `basket` `9:65` · `lock` `9:68` · `lightbulb` `9:71` · `calendar` `9:74` · `sort` `9:77` · `more-vertical` `9:80` · `bookmark` `9:83` · `leaf` `9:86` · `receipt` `9:89` · `torch` `9:92` · `users` `25:79`
+
+All authored as inline SVG, `stroke-width 1.8`, round caps/joins, strokes bound to colour variables. Simple geometric primitives — no icon-library dependency.
+
+## Glyph components (6)
+
+`Glyph/greens` `10:39` · `Glyph/dairy` `10:45` · `Glyph/fruit` `10:51` · `Glyph/pantry` `10:57` · `Glyph/frozen` `10:64` · `Glyph/dish` `13:101`
+
+Five category fallbacks plus a dish glyph, per the screen doc's pragmatic path. The full ~60-glyph set remains an asset commission and is **not** a build blocker.
+
+## Verification gate results
+
+| Check | Result |
+|---|---|
+| 16 frames at exactly 412 × 915, all populated | ✅ |
+| No green "Fresh" badge anywhere | ✅ (2 text matches are the words "Fresh Spinach" and "fresh greens" in prose, both `insidePill: false`) |
+| Visible unbound solid fills (token bypass) | ✅ 0 |
+| Non-solid paints | 2, both declared exceptions: screen 02 gradient scrim, screen 06 vignette |
+| Leftover shimmer placeholders | ✅ 0 |
+| WCAG AA contrast gate | ✅ 13/13, exit 0 |
+
+## Defects found by rendering
+
+Each was invisible in code and only surfaced by screenshotting:
+
+1. **`₹1,240` clipped to `₹1,24`** on screen 04 — three equal `FILL` columns gave 111 dp each against a 146 dp numeral. Fixed by switching stat columns to `HUG` with `SPACE_BETWEEN`.
+2. **Three nav cells carried unbound default fills** — `createAutoLayout()` applies a default white fill, never cleared on Inventory/Recipes/Profile. Made two tabs look simultaneously active.
+3. **`Nav/Scan` cell had the same stray default fill** — white on a light bar, so no render caught it. Only the token-bypass audit found it.
+4. **Hero steam strokes rendered hairline-thin** on screen 14 — resizing a 24 px SVG to 210 px scales geometry but not stroke weight. Set to 11.
+5. **Two detail lines hard-clipped** on screen 08. Fixed with tighter spacing plus `textTruncation: ENDING` so any overflow discloses itself rather than cutting.
+6. **Leaf glyph collided with the wordmark** on screen 02.
+7. **`sort` and `leaf` icons rendered malformed** and were redrawn.
+8. **Household settings row used an arrow-left icon**; added `Icon/users`.
+
+## Outstanding assets
+
+- **Screen 02 photograph.** The doc specifies overhead Indian vegetables under moody side light. Layout, gradient scrim and button hierarchy are correct; the background is an abstract botanical stand-in built from palette shapes. Swap in a real photograph when available.
+- **~55 remaining food glyphs.**
+- **Interaction states.** Pressed/focus are Flutter concerns (Plan 3) and require a non-zero transition duration.
