@@ -1,0 +1,16 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+*.iml
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets — never commit Supabase keys
+.env
+*.env.local

@@ -1,0 +1,201 @@
+# ShelfLife MVP — Design Specification
+
+**Date:** 2026-08-24
+**Status:** Awaiting review
+**Target:** MVP v1.0, Android-first, Flutter + Hive + Supabase, offline-first
+
+---
+
+## 1. Source documents
+
+This design reconciles three artefacts. Where they disagree, the resolution and its reasoning are recorded in §2.
+
+| Source | Location | Authority |
+|---|---|---|
+| PRD v1.0 | `C:\Users\rakes\Downloads\ShelfLife-PRD.docx` | Requirements, business rules, tech stack |
+| Screen prompts (visual direction v2) | `…\Documents\Codex\2026-08-10\shelflife-app-user-flow\outputs\ShelfLife-Stitch-Prompts.md` | Visual system, exact copy, 16 screens |
+| MVP user-flow board (FigJam) | `figma.com/board/VtBS3Rn1WMO9kUvXWkVdV1` | Flow logic, decisions, edge cases |
+
+The board is the most complete: 9 flows, 218 nodes, 170 connectors, with an explicit `[DECISION]` annotation layer.
+
+---
+
+## 2. Decision log
+
+Each row records what was decided, why, and which source won.
+
+| # | Decision | Resolution | Basis |
+|---|---|---|---|
+| D1 | Barcode lookup source | **Seeded local cache only, no external API.** Grows when a user names an unknown barcode. | Board `[DECISION]`: *"No paid barcode API… the flow stays fully offline."* Overrides an earlier preference for Open Food Facts. Keeps Flow 3 free of a network failure mode, satisfying Principle 6. |
+| D2 | Recipe seed size | **~40 recipes now**, seed format designed so growth to ~100 is appending rows. | Board says ~100; 40 is the reviewable subset. Data-only change to expand — no schema or code impact. |
+| D3 | Auth methods | **Email/password + guest mode live. Google button built, activated by config.** | PRD FR-01 says email. Board says email + password. Screen 02 makes Google primary. Building all three visually keeps screen 02 honest; Google needs OAuth credentials that do not exist yet, so it cannot be a blocker. |
+| D4 | Fresh-state chip | **Fresh items render no chip.** Only two chips exist: amber "Use in N days", red "Best used today". | Screen doc v2 explicitly overrides the board legend's green chip and states the reason: green is the brand colour, so a green chip reads as decoration rather than information. Later document, reasoned override. |
+| D5 | Recipe ingredient storage | **Normalised `recipe_ingredients` table.** `method_steps` stays JSON. | Departs from PRD §5.5 (`ingredients JSON`). FR-07 ranks by ingredient availability, which requires joining recipes against inventory; a JSON blob forces a full scan plus client-side parsing on every Recipes tab open, against a <2 s target. Steps are display-only and never queried, so JSON is correct for them. |
+| D6 | Household sharing | **Out of scope. No `household_id` column.** | PRD 3.3 "Could Have"; screen 16 shows a "Coming soon" chip; BR-05 states inventory is unique per account. Pre-building it would be speculative schema requiring rework. |
+| D7 | Deletion | **Hard delete, no soft-delete column.** | BR-02: *"Deleted inventory cannot be restored."* Board: *"BR-02: deletion is permanent, no undo."* |
+| D8 | `notifications` table role | **Dedup ledger, not a delivery queue.** | The PRD chose `flutter_local_notifications` over Firebase, so delivery is device-local. The table exists to satisfy BR-04 and the board's *"One notification per item per level."* |
+| D9 | Project location | `C:\src\shelflife` | Short path, no spaces, not OneDrive-synced. Windows Gradle builds hit `MAX_PATH` under deep user directories. |
+| D10 | Android toolchain | **Deferred.** Flutter SDK only for now. | Rendering and verifying all 16 screens needs `flutter run -d windows`, not the Android SDK. JDK + Android SDK (~2 GB) are required only to produce an APK. Native plugins sit behind interfaces (§5), so the UI compiles on any target. |
+
+---
+
+## 3. Keystone: canonical ingredient identity
+
+Three input paths must resolve to one identity before anything else works:
+
+- OCR emits `AMUL TAAZA TONED MILK 500ML`
+- the user types `Spinach`
+- a recipe references `palak`
+
+Two seeded tables provide that resolution:
+
+- **`ingredients`** — canonical catalogue: `canonical_name`, `category`, `default_unit`, `glyph_key`, per-storage `shelf_life_days`, `est_price_inr`
+- **`ingredient_aliases`** — `palak → spinach`, `toned milk → milk`, `amul taaza → milk`
+
+This single pair drives six features: receipt parsing, barcode categorisation, expiry estimation, glyph selection, recipe matching, and the shopping-list suppression on screen 15 (*"You already have onions and rice — we've left them off"*). Without it each of those needs its own fuzzy-match implementation, and they drift apart.
+
+`est_price_inr` is required because screen 04 shows "₹1,240 Saved this month" and screen 16 says *"about ₹1,240 you didn't throw away"*. Seeded with approximate Indian market rates, overridden by a receipt-captured price when OCR provides one. **Always labelled as an estimate in the UI** — never presented as a measured figure.
+
+---
+
+## 4. Data model
+
+Nine tables. PRD §5.5 specifies five; the additions and their justifications are below.
+
+| Table | Origin | Purpose |
+|---|---|---|
+| `profiles` | PRD `Users` | Mirrors `auth.users` |
+| `ingredients` | **new** (§3) | Canonical catalogue, seeded, globally readable |
+| `ingredient_aliases` | **new** (§3) | Alias → canonical resolution, seeded |
+| `products` | **new** | Barcode cache. Screen 09 promises *"we'll remember it for next time"*; D1 makes this the sole lookup path |
+| `inventory_items` | PRD `Inventory` | Adds `ingredient_id` FK, `expiry_source` enum (`user` / `printed` / `estimated` / `category_default`), `expiry_reason` text, `status` (`active` / `consumed`) |
+| `consumption_events` | **new** | Required by FR-09. "Money saved", "food rescued", "current streak" and screen 16's "94% used before expiry" are not computable from a mutable inventory row, because the row is gone once consumed |
+| `recipes` | PRD `Recipes` | `method_steps` JSON; ingredients normalised out (D5) |
+| `recipe_ingredients` | **new** (D5) | `recipe_id`, `ingredient_id`, `qty`, `unit`, `optional` |
+| `shopping_list_items` | PRD `Shopping List` | Adds `source` enum (`manual` / `ran_out` / `recipe`) + `source_recipe_id` — screen 15 renders "Added from Palak Paneer" vs "You've run out", so the caption *is* the enum |
+| `notifications` | PRD `Notifications` | Dedup ledger (D8) |
+
+**Row-level security.** Every user-owned table carries `user_id` with an RLS policy restricting all operations to `auth.uid()`. `ingredients`, `ingredient_aliases` and `recipes` are global read-only reference data. Satisfies BR-05 and the board's *"Row-level security scopes every row to user_id."*
+
+---
+
+## 5. Three pure engines
+
+Isolated, no I/O, unit-testable without a device or emulator. This is what makes the project verifiable in the current environment.
+
+### 5.1 Expiry estimator
+
+`(ingredient, storage, purchaseDate, printedExpiry?) → (date, source, reason)`
+
+Precedence, per FR-05 and the board's Flow 6:
+
+1. User override → `source: user`. BR-01: *"user value always wins."*
+2. Printed date from pack or receipt → `source: printed`
+3. Per-item shelf life for the storage location → `source: estimated`
+4. Category fallback → `source: category_default`
+
+Returns a **reason string**, which is what lets screen 12 render *"You bought this five days ago, and fresh greens keep about six."* Principle 4 requires the estimate to explain itself, so the explanation is a return value rather than UI copy. The board states this as *"Freshness status computed — Green · Amber · Red, plus a plain-English reason."*
+
+Thresholds from the board: amber at 3 days out, red on the day. Per D4, fresh returns no chip at all.
+
+### 5.2 Recipe scorer
+
+`score = 0.6·(have/total) + 0.3·urgency + 0.1·speed`
+
+where, over the recipe's ingredients matched in active inventory:
+
+- `have/total` counts non-optional ingredients only
+- `urgency = max(0, 1 − daysToExpiry / 3)` taken over matched items, so an item due today scores 1.0 and anything 3+ days out scores 0
+- `speed = max(0, 1 − prepTimeMinutes / 60)`
+
+Weights are ordered to match FR-07's stated priority — availability, then expiry urgency, then preparation time.
+
+Two hard constraints, both from the source documents:
+
+- **The score orders the list and is never rendered.** Screen doc: *"Bare match scores. '78% match' is meaningless."* Board: *"Match score is explained, never a bare number."* The UI shows "7 of 9 ingredients".
+- The query must return **which** urgent ingredients matched, so screen 13 can say *"Uses your spinach and paneer, both best used today."*
+
+Quick Meals filter = prep time under 20 minutes (board).
+
+### 5.3 Receipt parser
+
+Line → normalise → strip quantity/unit/price tokens → **filter non-grocery lines** (totals, GST, store name — an explicit board requirement) → fuzzy-match against `ingredient_aliases` → confidence score.
+
+Below the confidence threshold, the row surfaces screen 08's "Needs your input" chip rather than guessing. Testable against fixture receipt text with no camera involved.
+
+---
+
+## 6. Offline behaviour and sync
+
+Hive is the source of truth; Supabase is a backup and sync channel. Board: *"Local storage is the source of truth; the cloud is a backup and a sync channel."*
+
+- Every write goes to Hive first, then appends an operation to a Hive sync queue
+- On reconnect the queue **drains in original order** (board), with retry and backoff; operations stay queued on failure
+- Conflict resolution: latest edit wins, **both timestamps retained for audit** (board, PRD 5.8)
+- Sync status is a subtle header icon, never a blocking spinner (PRD 4.8)
+- Guest mode has **no cloud leg at all**. Upgrade re-keys local Hive rows to the new `user_id` and pushes them — zero data loss
+- A persistent Home banner ("Save my kitchen") states plainly that uninstall means data loss
+- Sign out clears the local cache (BR-05)
+
+Native capabilities — ML Kit OCR, `mobile_scanner`, `flutter_local_notifications` — sit behind interfaces with fake implementations, so all 16 screens compile and render on desktop for verification while the real plugins are used on Android.
+
+---
+
+## 7. Module layout
+
+Feature-first, exactly as PRD §5.4 specifies:
+
+```
+lib/
+├── core/          constants, themes, utilities, services
+├── features/      authentication, inventory, scanner, recipes,
+│                  shopping, dashboard, profile
+├── models/
+├── repositories/
+├── database/
+└── main.dart
+```
+
+---
+
+## 8. Design pipeline
+
+The Figma MCP server exposes write tools, so screens are authored natively in Figma rather than mocked elsewhere.
+
+1. Create a Figma **design** file in `rakeshpathak.pgp25's team`, alongside the existing flow board — the screen doc's "After generation" section asks for flow and screens side by side
+2. Build the design system first as Figma variables: the exact palette (`#44540E` canvas, `#2E3D0A` deep surfaces, `#5A6B1A` accent, `#E8EFE0` frosted, `#1A2408` / `#5F6B45` text, amber `#B26A00` on `#FFF3E0`, red `#C62828` on `#FDECEA`), Inter type ramp, 8 dp spacing, 24 dp card radius
+3. Author the 16 screens at 412 × 915 dp
+4. Derive the Flutter theme from the same token values, so Figma and code cannot drift
+
+Verification order taken from the screen doc's own checklist: field completeness against the flow, empty and error states present as real screens, contrast audit on every frosted surface, one mockup per named screen.
+
+---
+
+## 9. Verification plan
+
+Success criteria, each independently checkable:
+
+1. `dart test` green on all three engines in §5 — written test-first
+2. `flutter run -d windows` renders all 16 screens; each screenshotted and compared against the screen doc's stated values
+3. **Automated WCAG AA contrast assertion** over every foreground/background pair in the theme. The screen doc warns this direction is *"the most beautiful of the options and the easiest to fail AA with"*, so this is asserted in tests rather than eyeballed
+4. **Golden test asserting fresh items render no chip.** The screen doc predicts every generator re-adds them; a golden test makes the regression impossible
+5. **RLS verified against the live Supabase project** with two real users, asserting A cannot read B's rows. Asserting isolation is not the same as testing it
+6. Offline path: airplane-mode write → queue → reconnect → drain in order
+
+---
+
+## 10. Out of MVP scope
+
+Per PRD 3.2 and the board's "Future state" lane: grocery ordering, payments, AI image recognition, voice input, smart-fridge integration, nutrition tracking, household sharing, carbon-footprint tracking, predictive purchasing, dietary and allergy filters, quick-commerce handoff, per-field merge conflict resolution.
+
+---
+
+## 11. Known risks
+
+| Risk | Mitigation |
+|---|---|
+| OCR accuracy varies by receipt | Every row editable before saving (screen 08); confidence threshold routes low-certainty rows to explicit user input |
+| Seeded barcode cache has low first-scan hit rate (consequence of D1) | Screen 09 is designed as a normal path, not an error; cache grows from user entries |
+| `est_price_inr` estimates are approximate | Always labelled as estimates in the UI; receipt-captured prices override |
+| Alias coverage gaps break matching | Free text accepted and saved locally for next time (board); alias table is data, extensible without code changes |
+| Android toolchain still uninstalled (D10) | Blocks APK production only, not screen verification. ~2 GB install when needed |
