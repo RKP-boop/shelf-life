@@ -36,6 +36,8 @@ Each row records what was decided, why, and which source won.
 | D8 | `notifications` table role | **Dedup ledger, not a delivery queue.** | The PRD chose `flutter_local_notifications` over Firebase, so delivery is device-local. The table exists to satisfy BR-04 and the board's *"One notification per item per level."* |
 | D9 | Project location | `C:\src\shelflife` | Short path, no spaces, not OneDrive-synced. Windows Gradle builds hit `MAX_PATH` under deep user directories. |
 | D10 | Android toolchain | **Deferred.** Flutter SDK only for now. | Rendering and verifying all 16 screens needs `flutter run -d windows`, not the Android SDK. JDK + Android SDK (~2 GB) are required only to produce an APK. Native plugins sit behind interfaces (§5), so the UI compiles on any target. |
+| D11 | Amber chip text colour | **`#B26A00` → `#9E5D00`** | Measured: `#B26A00` on `#FFF3E0` is 3.86:1, failing WCAG AA (4.5 floor) at the 12sp Medium chip size, which does not qualify for the 3.0 large-text exemption. The screen doc's claim that "dark amber over pale amber passes" is incorrect. `#9E5D00` measures 4.76:1 — the smallest change that passes, chosen to preserve the intended hue. Darkening the tint instead was tested and makes the ratio worse. PRD 4.11 mandates AA. |
+| D12 | `#A8B885` usage constraint | **Restricted to deep surfaces (`#2E3D0A`) only.** | Measured 5.51:1 on `#2E3D0A` but 3.91:1 on the `#44540E` canvas. Screen 02's 12sp small print is compliant only because it sits on the near-solid base of the gradient. The variable's scope and name encode this restriction so it cannot be misapplied. |
 
 ---
 
