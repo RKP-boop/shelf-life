@@ -119,3 +119,41 @@ Ten instances had been using stand-in produce because the correct render didn't 
 - **Dish photographs (5)** — recipe cards and the recipe-detail hero currently use produce as stand-ins. Prompts are in `ASSET-PROMPTS.md`.
 - **Tier 2 produce (13)** — prompts ready; not blocking, since every item any built screen names now has a real render.
 - **Hero flat-lay (1)** — auth landing still uses the abstract botanical composition.
+
+## Tier 2 assets — segmented from a single sheet, 2026-08-25
+
+Supplied as **one 1536×1024 sheet** containing 13 items in a 5/5/3 grid, then split programmatically by `tools/segment_sheet.py`.
+
+### How the split works
+
+Projection-profile splitting, not connected-component labelling. It cuts on empty gutters, which keeps a subject's separate parts together — the garlic bulb and its three loose cloves stay one item, where blob labelling would have emitted four.
+
+Rows are split first, then columns *within each row*. A row's own column profile is far cleaner than the whole sheet's, where a tall item in one row bridges a gutter in another.
+
+### What tuning was needed
+
+| Finding | Resolution |
+|---|---|
+| The sheet **looked** to have a mottled multi-colour background in chat | It was genuinely transparent — 56% zero-alpha. The mottling is leftover RGB *beneath* the alpha, which chat renderers composite. Analysing the file rather than the preview was the difference between "unusable" and "clean". |
+| First pass found **3 items, not 13** | It found the three rows. Items within a row were bridged by faint shadow glow, so no column was exactly empty. |
+| Threshold sweep | `--split-alpha 90 --floor 0.07` yields `[5, 5, 3]` = 13. The floor treats a column below 7% of the row's peak as empty. |
+| Reading order was scrambled | My final y-bucket sort reordered items, since items in a row rarely share a top edge. Removed it — the loops already produce reading order. |
+| **Lemon carried a stray orange speck** bled from the neighbouring carrot | Added a despeckle pass: grow from the densest seed, keep the reachable mass, drop islands. Dropped 674 px from the lemon and **zero** from the other twelve, so it was surgical rather than destructive. |
+
+The splitting mask uses a firm alpha threshold while the output keeps the file's original soft alpha — otherwise the despeckling would have hardened every shadow edge.
+
+### Self-test
+
+Before running it on real input, the tool was validated by recomposing the 10 Tier 1 assets into a synthetic sheet: **10/10 recovered on a transparent sheet and 10/10 on a flat-white one.**
+
+### Produce library — 23 components
+
+`apple` `atta` `avocado` `banana` `broccoli` `capsicum` `carrot` `cauliflower` `coriander` `cream` `cucumber` `curd` `garlic` `ginger` `lemon` `milk` `onion` `paneer` `peas-frozen` `potato` `rice` `spinach` `tomato`
+
+Home's Fruits category tile now uses `apple` rather than `banana` — more canonical for the category.
+
+### Known UX consideration
+
+Four items are **bowl-based** — `curd`, `cream`, `rice`, `peas-frozen` — and `curd` and `cream` are near-identical white swirls in differently-toned blue bowls. At the 34–46 dp thumbnail sizes used in inventory rows and shopping lists these are not distinguishable from one another.
+
+This is acceptable rather than broken: the item name always sits adjacent, so the render is reinforcement, not the sole identifier. But if bowl items ever need to be told apart at a glance, they need distinguishing silhouettes rather than distinguishing colours.
