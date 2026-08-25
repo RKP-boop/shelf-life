@@ -62,3 +62,60 @@ Laid out on a 6-column grid, 520 dp × 1030 dp pitch. Every frame exactly 412 ×
 
 - **True 3D renders.** Produce is gradient-vector approximating dimension, per your decision. Each is a swappable component, so real renders drop in without touching layouts.
 - **Interaction states.** Pressed/focus are Flutter concerns; they need a non-zero transition duration.
+
+---
+
+## 3D render assets — integrated 2026-08-25
+
+Source: `design/3D Assets/` (originals) → `design/3D Assets/normalized/` (processed).
+
+### Normalisation applied
+
+Originals were high quality but not to spec, so each was processed before upload:
+
+| Issue found | Fix |
+|---|---|
+| Subjects filled **96–100%** of frame, not the specified 76% | Auto-cropped to the alpha bounding box, rescaled so the longest edge is 76% of a 1024 canvas, re-centred on transparent ground. Gives every item a **matching apparent scale** in equal-sized tiles. |
+| `avocado` was 1536×1024, `coriander` 1355×1161 | Re-squared to 1024×1024 |
+| `produce-spinach.png.png` double extension | Renamed |
+| `produce-avacado.png` misspelled | Renamed |
+| **`produce-brocolli.png` was actually the coriander render** | Renamed to `coriander.png`. Nothing was missing — all 10 Tier 1 items were present, two just misnamed. |
+
+All 10 verified as genuinely transparent (corner alpha 0–1, not merely an RGBA channel).
+
+### Integration method
+
+The image fill sits **on the component frame itself**, not on a child node. This matters: ~80 instances had been `rescale`d to sizes from 34 dp to 238 dp, and swapping child artwork would have left every one of them overflowing. A frame fill scales with the frame, so all instances updated correctly at their existing sizes.
+
+### Components
+
+| Component | Node | Instances |
+|---|---|---|
+| `Produce/spinach` | `15:63` | 23 |
+| `Produce/milk` | `5:24` | 20 |
+| `Produce/tomato` | `3:8` | 14 |
+| `Produce/avocado` | `5:31` | 8 |
+| `Produce/banana` | `3:22` | 7 |
+| `Produce/broccoli` | `5:42` | 3 |
+| `Produce/onion` | `49:67` | 3 |
+| `Produce/atta` | `49:63` | 2 |
+| `Produce/coriander` | `49:65` | 2 |
+| `Produce/paneer` | `49:69` | 1 |
+
+`Produce/orange` was **retired** — it was the last vector item and would have looked out of place among renders. All 6 of its usages were reassigned first, then it was deleted at zero instances.
+
+### Semantic corrections
+
+Ten instances had been using stand-in produce because the correct render didn't exist when the screen was built:
+
+- Home hub: Fruits tile → banana, Pantry tile → atta
+- Mark-used confirm: "Onion" row → onion (was orange)
+- Shopping list: "Atta" → atta, "Kasuri methi" → coriander, "Coriander" → coriander
+- Add by hand: "Spinach (frozen)" → broccoli
+- Value prop 2 / 3, Auth landing: decorative cluster items → onion / paneer for palette variety
+
+### Still outstanding
+
+- **Dish photographs (5)** — recipe cards and the recipe-detail hero currently use produce as stand-ins. Prompts are in `ASSET-PROMPTS.md`.
+- **Tier 2 produce (13)** — prompts ready; not blocking, since every item any built screen names now has a real render.
+- **Hero flat-lay (1)** — auth landing still uses the abstract botanical composition.
