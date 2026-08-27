@@ -58,17 +58,10 @@ def check(name: str, ok: bool, detail: str = "") -> bool:
     return ok
 
 
-def count_of(table: str, token: str | None = None) -> int | None:
-    status, body = call("GET", f"/rest/v1/{table}?select=*", token,
-                        extra={"Prefer": "count=exact", "Range": "0-0"})
-    if status not in (200, 206):
-        return None
-    return len(body) if isinstance(body, list) and status == 200 else _hdr_count(table, token)
-
-
-def _hdr_count(table: str, token: str | None) -> int | None:
+def _hdr_count(table: str, token: str | None = None) -> int | None:
     """Exact count via Content-Range, which PostgREST returns as 0-24/65."""
-    req = urllib.request.Request(f"{URL}/rest/v1/{table}?select=id", method="HEAD")
+    sep = "&" if "?" in table else "?"
+    req = urllib.request.Request(f"{URL}/rest/v1/{table}{sep}select=*", method="HEAD")
     req.add_header("apikey", ANON)
     req.add_header("Authorization", f"Bearer {token or ANON}")
     req.add_header("Prefer", "count=exact")
@@ -112,10 +105,30 @@ def main() -> int:
         return 1
 
     # ------------------------------------------------------------ 2 seed counts
+    # Reference-table policies are scoped `to authenticated`, so these must be
+    # counted with a real session. Counting as anon correctly returns 0 — that
+    # is the policy working, not missing data.
     print("\n2. seeded reference data")
-    for table, want in EXPECTED.items():
-        got = _hdr_count(table)
-        check(f"{table} = {want}", got == want, f"got {got}")
+    seed_tok = signup(f"verify-seed-{uuid.uuid4().hex[:8]}@example.com",
+                      "ShelfLife-Verify-9142!")
+    if not seed_tok:
+        check("session for counting reference data", False,
+              "turn OFF Authentication > Email > Confirm email")
+    else:
+        for table, want in EXPECTED.items():
+            # products grows by design (D1), so assert the SEEDED subset only.
+            # Counting every row would fail as soon as a user contributes one,
+            # which is the feature working rather than a regression.
+            suffix = "?verified=is.true" if table == "products" else ""
+            got = _hdr_count(table + suffix, seed_tok)
+            label = f"{table} seeded = {want}" if suffix else f"{table} = {want}"
+            check(label, got == want, f"got {got}")
+
+        contributed = _hdr_count("products?verified=is.false", seed_tok)
+        print(f"        ({contributed} user-contributed barcode(s) on top — D1 growth)")
+        # and the same tables must stay invisible without a session
+        anon_ing = _hdr_count("ingredients")
+        check("reference data invisible to anon", anon_ing == 0, f"anon saw {anon_ing}")
 
     # ------------------------------------------------- 3 anonymous access denied
     print("\n3. anonymous access")
