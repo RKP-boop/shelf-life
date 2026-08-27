@@ -248,3 +248,68 @@ A geometric clipping audit computes each instance's visible artwork box, walks t
 | Dish components | 5 |
 | Total asset components | **28** |
 | Screens | 52, all 412 × 915 |
+
+## Category fallback glyphs — 2026-08-27
+
+Five components closing the gap between the seeded catalogue and the asset
+library: 41 of 65 ingredients have no individual render and need a category
+marker.
+
+`Glyph/cat-vegetables` `81:90` · `Glyph/cat-fruits` `81:96` · `Glyph/cat-dairy` `81:102` · `Glyph/cat-pantry` `81:108` · `Glyph/cat-frozen` `81:116`
+
+| Fallback | Silhouette | Covers |
+|---|---|---|
+| `cat-vegetables` | leafy sprout | 9 — okra, brinjal, cabbage, beans, curry leaves, green chilli, mushroom, spring onion, bottle gourd |
+| `cat-fruits` | round fruit with a leaf | 7 — mango, grapes, guava, orange, papaya, pomegranate, watermelon |
+| `cat-dairy` | gable-top carton | 4 — butter, ghee, cheese, buttermilk |
+| `cat-pantry` | lidded jar | 18 — dals, spices, oil, sugar, salt, tea, coffee, bread, eggs and more |
+| `cat-frozen` | snowflake | 3 — ice cream, frozen paratha, frozen vegetables |
+
+### Why iconographic and not a borrowed render
+
+Reusing a real render — showing the broccoli photograph for okra — would put the
+**wrong food** beside the right name. A deliberately iconographic marker reads
+honestly as "category: vegetable" instead of asserting something false.
+Distinction between the five comes from **silhouette, not colour**, so the set
+still works for anyone who cannot separate the tints (PRD 4.11).
+
+### Two sizing bugs, both instructive
+
+1. **`resize()` does not scale a child vector.** The first build placed the
+   artwork as a child node, so shrinking an instance to 34 dp left a 91 dp glyph
+   inside a 34 dp frame — visible only as a clipped fragment. Produce components
+   avoid this because their artwork is an image *fill*, and fills do scale with
+   the frame.
+2. **Auto-layout padding does not scale either.** The obvious fix — auto-layout
+   with a `FILL` child and 12% padding — worked at 120 dp but left **6 dp of
+   artwork at 34 dp**, because a 14 dp pad is 14 dp at every frame size.
+
+The working answer is to bake the inset into the SVG viewBox (a `translate` inside
+a viewBox enlarged by `1/0.76`) and use zero padding, so the art fills 100% of the
+frame. Verified: 58 dp → 58 dp art, 46 → 46, 34 → 34.
+
+All five are **120 × 120**, matching `Produce/*` exactly, so `swapComponent`
+never rescales an instance — the defect that overflowed the recipe panels by
+21 px when the Dish components were built at 160.
+
+### Refinements from rendering at real size
+
+- **pantry** was a tied sack, too close to the round fruit silhouette. Redrawn as
+  a lidded jar with a label band.
+- **frozen** first read as tangled sticks. Adding decorative tips made it busier,
+  not clearer; the working version is three arms and a solid hub. At 34 dp, fewer
+  and larger shapes always win.
+
+### Contract guard
+
+`tools/check_asset_coverage.py` asserts every `ingredients.glyph_key` and
+`recipes.image_key` resolves to a real component, and that a fallback matches its
+ingredient's own category — so a pantry item can never display a vegetable
+marker. Both are plain text in Postgres with nothing enforcing them, so a typo
+would otherwise surface as a blank tile in the running app and nowhere else.
+
+**33/33 references resolve.** Proven by injecting two faults (a nonexistent glyph
+and a wrong-category fallback) and confirming a non-zero exit, then reverting.
+
+Asset library is now **33 components**: 23 produce renders, 5 category fallbacks,
+5 dish photographs.
