@@ -1,0 +1,17 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+
+# Secrets — never commit
+android/key.properties
+*.jks
+*.keystore
+.env
+
+# Generated (regenerate with tools/gen_theme.py)
+# lib/core/theme/tokens.g.dart is COMMITTED deliberately: it is the
+# design/code contract and reviewing its diff is how palette drift is caught.

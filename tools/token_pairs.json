@@ -1,15 +1,116 @@
 [
-  {"fg":"text/on-olive-primary",   "bg":"surface/canvas", "minPx":14, "use":"titles and body on canvas"},
-  {"fg":"text/on-olive-secondary", "bg":"surface/canvas", "minPx":14, "use":"secondary body on canvas"},
-  {"fg":"text/on-deep-tertiary",   "bg":"surface/deep",   "minPx":12, "use":"small print on deep surfaces ONLY (D12)"},
-  {"fg":"text/on-olive-secondary", "bg":"surface/deep",   "minPx":12, "use":"stat labels on deep card"},
-  {"fg":"text/on-olive-primary",   "bg":"surface/deep",   "minPx":14, "use":"bottom bar and deep-olive button labels"},
-  {"fg":"text/on-light-primary",   "bg":"surface/frosted","minPx":16, "use":"card titles"},
-  {"fg":"text/on-light-secondary", "bg":"surface/frosted","minPx":14, "use":"card secondary text"},
-  {"fg":"text/on-light-primary",   "bg":"surface/opaque", "minPx":16, "use":"opaque frosted surfaces"},
-  {"fg":"text/on-light-secondary", "bg":"surface/opaque", "minPx":14, "use":"opaque frosted secondary"},
-  {"fg":"state/amber-text",        "bg":"state/amber-bg", "minPx":12, "use":"amber freshness badge (D11)"},
-  {"fg":"state/red-text",          "bg":"state/red-bg",   "minPx":12, "use":"red freshness badge"},
-  {"fg":"info/text",               "bg":"info/bg",        "minPx":14, "use":"informational strip"},
-  {"fg":"text/on-light-primary",   "bg":"surface/field",  "minPx":16, "use":"cream pill button and form fields"}
+  {
+    "fg": "text/primary",
+    "bg": "card/base",
+    "minPx": 15,
+    "use": "card and screen titles"
+  },
+  {
+    "fg": "text/primary",
+    "bg": "card/soft",
+    "minPx": 15,
+    "use": "soft card surfaces"
+  },
+  {
+    "fg": "text/primary",
+    "bg": "page/mint",
+    "minPx": 15,
+    "use": "headings on the mint wash"
+  },
+  {
+    "fg": "text/primary",
+    "bg": "page/cream",
+    "minPx": 15,
+    "use": "headings on the cream wash"
+  },
+  {
+    "fg": "text/primary",
+    "bg": "page/blush",
+    "minPx": 15,
+    "use": "headings on the blush wash"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "card/base",
+    "minPx": 13,
+    "use": "secondary text on cards"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "card/soft",
+    "minPx": 13,
+    "use": "secondary on soft cards"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "page/mint",
+    "minPx": 13,
+    "use": "secondary on mint"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "page/cream",
+    "minPx": 13,
+    "use": "secondary on cream"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "page/blush",
+    "minPx": 13,
+    "use": "secondary on blush"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "tint/peach",
+    "minPx": 13,
+    "use": "secondary on peach tint"
+  },
+  {
+    "fg": "text/secondary",
+    "bg": "tint/lemon",
+    "minPx": 13,
+    "use": "secondary on lemon tint"
+  },
+  {
+    "fg": "text/on-accent",
+    "bg": "accent/primary",
+    "minPx": 15,
+    "use": "primary button label (D14)"
+  },
+  {
+    "fg": "accent/primary",
+    "bg": "card/base",
+    "minPx": 12,
+    "use": "accent text and links"
+  },
+  {
+    "fg": "accent/primary",
+    "bg": "tint/mint",
+    "minPx": 11,
+    "use": "accent on mint chips"
+  },
+  {
+    "fg": "accent/primary",
+    "bg": "page/cream",
+    "minPx": 12,
+    "use": "accent on cream"
+  },
+  {
+    "fg": "state/amber-text",
+    "bg": "state/amber-bg",
+    "minPx": 11,
+    "use": "amber freshness badge"
+  },
+  {
+    "fg": "state/red-text",
+    "bg": "state/red-bg",
+    "minPx": 11,
+    "use": "red freshness badge"
+  },
+  {
+    "fg": "info/text",
+    "bg": "info/bg",
+    "minPx": 13,
+    "use": "informational strip"
+  }
 ]
