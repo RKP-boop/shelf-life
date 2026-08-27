@@ -65,3 +65,16 @@ delete from products where verified = false and product_name = 'Verify probe';
 ```
 
 `products` has no delete policy by design, so this needs the SQL editor.
+
+## Post-verification: email confirmation re-enabled
+
+Confirmation was turned back **on** after the full run (`mailer_autoconfirm: false`),
+which is the correct production setting.
+
+`verify_backend.py` now detects this and **skips** the session-dependent groups
+rather than reporting them as failures — a correctly-secured project should not
+look like a regression. The summary says `PARTIAL` and names what was not
+re-checked, so a partial run can never be mistaken for a full pass. Re-running now
+gives 6/6 on the schema and anonymous-access groups.
+
+To reproduce the full 33/33, temporarily turn *Confirm email* off again.

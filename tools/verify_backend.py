@@ -86,9 +86,26 @@ def signup(email: str, password: str) -> str | None:
     return None
 
 
+def autoconfirm_on() -> bool:
+    """True when signups are auto-confirmed, so a session is issued directly."""
+    _status, body = call("GET", "/auth/v1/settings")
+    return bool(isinstance(body, dict) and body.get("mailer_autoconfirm"))
+
+
 def main() -> int:
     print("ShelfLife backend verification")
     print(f"project: {URL}\n")
+
+    # Detect the confirmation setting up front. Without this, a run against a
+    # correctly-secured project reports a wall of failures that read like a
+    # backend regression rather than an intentional configuration state.
+    live_auth = autoconfirm_on()
+    if not live_auth:
+        print("NOTE  Email confirmation is ON, so signup issues no session and the")
+        print("      checks needing a real user cannot run. That is the correct")
+        print("      production setting, not a regression.")
+        print("      For the full suite, temporarily turn OFF:")
+        print("      Authentication > Sign In / Providers > Email > Confirm email\n")
 
     # ---------------------------------------------------------------- 1 tables
     print("1. tables reachable")
@@ -109,11 +126,10 @@ def main() -> int:
     # counted with a real session. Counting as anon correctly returns 0 — that
     # is the policy working, not missing data.
     print("\n2. seeded reference data")
-    seed_tok = signup(f"verify-seed-{uuid.uuid4().hex[:8]}@example.com",
-                      "ShelfLife-Verify-9142!")
+    seed_tok = (signup(f"verify-seed-{uuid.uuid4().hex[:8]}@example.com",
+                       "ShelfLife-Verify-9142!") if live_auth else None)
     if not seed_tok:
-        check("session for counting reference data", False,
-              "turn OFF Authentication > Email > Confirm email")
+        print("  SKIP  needs a session (email confirmation is on)")
     else:
         for table, want in EXPECTED.items():
             # products grows by design (D1), so assert the SEEDED subset only.
@@ -144,12 +160,11 @@ def main() -> int:
     print("\n4. RLS isolation between two real users")
     stamp = uuid.uuid4().hex[:8]
     pwd = "ShelfLife-Verify-9142!"
-    tok_a = signup(f"verify-a-{stamp}@example.com", pwd)
-    tok_b = signup(f"verify-b-{stamp}@example.com", pwd)
+    tok_a = signup(f"verify-a-{stamp}@example.com", pwd) if live_auth else None
+    tok_b = signup(f"verify-b-{stamp}@example.com", pwd) if live_auth else None
 
     if not tok_a or not tok_b:
-        check("two users created", False,
-              "no session returned -- turn OFF Authentication > Email > Confirm email")
+        print("  SKIP  needs two sessions (email confirmation is on)")
     else:
         check("two users created", True)
         # user A writes one item
@@ -293,14 +308,22 @@ def main() -> int:
     # ------------------------------------------------------------------ summary
     passed = sum(1 for ok, _, _ in results if ok)
     total = len(results)
-    print(f"\n{'=' * 60}\n{passed}/{total} checks passed")
+    print(f"\n{'=' * 60}\n{passed}/{total} checks passed"
+          + ("" if live_auth else "   (session-dependent groups SKIPPED)"))
     failed = [f"{n}  {d}" for ok, n, d in results if not ok]
     if failed:
         print("\nfailures:", file=sys.stderr)
         for f in failed:
             print(f"  - {f}", file=sys.stderr)
         return 1
-    print("backend verified")
+    # A partial run must never claim a full pass -- the RLS isolation test is
+    # the whole point of this script, and it is one of the skipped groups.
+    if not live_auth:
+        print("PARTIAL: schema and anonymous-access checks passed.")
+        print("         RLS isolation and seed counts were NOT re-checked in this run.")
+        print("         Full suite last passed 33/33 -- see supabase/VERIFIED.md.")
+    else:
+        print("backend verified")
     return 0
 
 
