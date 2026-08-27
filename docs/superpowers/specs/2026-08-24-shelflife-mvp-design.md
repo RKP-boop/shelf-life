@@ -67,7 +67,7 @@ This single pair drives six features: receipt parsing, barcode categorisation, e
 
 ## 4. Data model
 
-Nine tables. PRD §5.5 specifies five; the additions and their justifications are below.
+Ten tables. PRD §5.5 specifies five; the additions and their justifications are below.
 
 | Table | Origin | Purpose |
 |---|---|---|
@@ -81,6 +81,8 @@ Nine tables. PRD §5.5 specifies five; the additions and their justifications ar
 | `recipe_ingredients` | **new** (D5) | `recipe_id`, `ingredient_id`, `qty`, `unit`, `optional` |
 | `shopping_list_items` | PRD `Shopping List` | Adds `source` enum (`manual` / `ran_out` / `recipe`) + `source_recipe_id` — screen 15 renders "Added from Palak Paneer" vs "You've run out", so the caption *is* the enum |
 | `notifications` | PRD `Notifications` | Dedup ledger (D8) |
+
+*(Earlier drafts of this section said "nine"; the list has always had ten rows.)*
 
 **Row-level security.** Every user-owned table carries `user_id` with an RLS policy restricting all operations to `auth.uid()`. `ingredients`, `ingredient_aliases` and `recipes` are global read-only reference data. Satisfies BR-05 and the board's *"Row-level security scopes every row to user_id."*
 
