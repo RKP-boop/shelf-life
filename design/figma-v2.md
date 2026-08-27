@@ -201,3 +201,50 @@ The reconnected Figma MCP supports a `nodeIds` array on `upload_assets`, so each
 | Library-only components (available, not yet placed) | 12 — `capsicum` `carrot` `cauliflower` `cream` `cucumber` `curd` `garlic` `ginger` `lemon` `peas-frozen` `potato` `rice` |
 
 `banana` (Tier 1) was also regenerated as a bunch rather than a single fruit, and replaced.
+
+## Dish photographs integrated — 2026-08-27
+
+Five dishes supplied as individual files in `design/3D Assets/Dish assets/`, normalised into `normalized-dishes/`.
+
+`Dish/aloo-gobi` `67:1179` · `Dish/avocado-toast` `67:1181` · `Dish/palak-paneer` `67:1183` · `Dish/paneer-bhurji` `67:1185` · `Dish/vegetable-pulao` `67:1187`
+
+### Better than specified
+
+The prompt sheet said dishes needn't be transparent, since they sit inside a tinted panel. All five arrived **transparent at 1254×1254**, which is better: they now take the panel's tint rather than carrying a competing background, so they sit consistently with the produce.
+
+Normalised at an **88% inset** rather than the produce 76%. Dishes are the hero of their panel and all five are already near-square, so they can carry more presence.
+
+### Placement — 11 swaps, audited by hand
+
+A context-walk found 15 produce instances near recipe names, but **4 were false positives** and were deliberately left alone:
+
+| Left as produce | Why |
+|---|---|
+| `15:265` Item detail hero | This is the *Fresh Spinach* item hero. The walker caught "Palak Paneer" from the recipe row further down the screen. Swapping it would have replaced the item with a dish. |
+| `35:1410` Shopping list "Cream" | An ingredient row, not a dish. Separately corrected from the `milk` render to the new `cream` component. |
+| `35:1423` Shopping list "Kasuri methi" | Ingredient row; `coriander` was already right. |
+| `34:1223` Recipe detail hero, second item | Hidden rather than swapped — with the real dish present, a second ingredient in the hero is clutter. |
+
+Swapped: Home hub "Cook tonight", Item detail "Cook it tonight", Recipes list ×3, Recipe detail hero, Saved recipes ×4, and the Notifications "Tonight's dinner" card, which now correctly shows **paneer bhurji** — the dish its copy names.
+
+### Defect: swapComponent rescales by component-size ratio
+
+Dish components were built at 160×160 while Produce are 120×120. `swapComponent` preserves an instance's scale *relative to its main component*, so every 92 px produce instance became 92 × (160/120) = **123 px** — overflowing the 100 px recipe panel by 21.3 px. Resizing before the swap does not prevent it.
+
+Fixed in two parts:
+
+1. **Recipe cards enlarged** — dish panel 100 → 132 px, card 200 → 232 px, with the text block shifted down. The food now leads the card, closer to the reference.
+2. **Every dish refitted to its container**, sizing each instance so its visible artwork occupies a fixed fraction of the parent. Two instances needed special handling: on Home hub and Item detail the dish is a *sibling* of its tint tile rather than a child, so measuring the parent gave the whole card — those were aligned to the tile instead.
+
+### Verification
+
+A geometric clipping audit computes each instance's visible artwork box, walks to the nearest clipping ancestor, and measures overflow on all four edges:
+
+**83 instances checked — 0 clipped.**
+
+| | |
+|---|---|
+| Produce components | 23 |
+| Dish components | 5 |
+| Total asset components | **28** |
+| Screens | 52, all 412 × 915 |
