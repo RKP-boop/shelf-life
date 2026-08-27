@@ -157,3 +157,47 @@ Home's Fruits category tile now uses `apple` rather than `banana` — more canon
 Four items are **bowl-based** — `curd`, `cream`, `rice`, `peas-frozen` — and `curd` and `cream` are near-identical white swirls in differently-toned blue bowls. At the 34–46 dp thumbnail sizes used in inventory rows and shopping lists these are not distinguishable from one another.
 
 This is acceptable rather than broken: the item name always sits adjacent, so the render is reinforcement, not the sole identifier. But if bowl items ever need to be told apart at a glance, they need distinguishing silhouettes rather than distinguishing colours.
+
+## Tier 2 replaced with individual renders — 2026-08-27
+
+The `tier2-raw/` folder was replaced with **14 individually generated files** rather than sheet crops. All were swapped into the existing components in place.
+
+### Why this mattered — the sheet approach produced soft assets
+
+| | sheet crop | individual render | gain |
+|---|---|---|---|
+| typical subject size | ~280 px | ~1,220 px | **~4.3×** |
+| scaling applied to reach 778 px | **2.4–3.0× upscale** | 0.6× downscale | — |
+
+A 1536×1024 sheet split 13 ways gives each item only ~280 px, so every Tier 2 asset was being upscaled 2.4–3.0× and rendering visibly soft — worst at the 238 dp item-detail hero. **A single sheet is fine for identifying and cropping, but not for final asset resolution.** Individual files at ~1,200 px are now downscaled rather than upscaled.
+
+### Despeckle removed for individual files
+
+The despeckle pass — needed for sheet crops, where a neighbour's artwork can bleed into a crop — actively destroyed content here:
+
+- **peas lost 66,816 px**: the render has loose peas scattered outside the pile, and "keep the largest connected mass" deleted them
+- **rice lost 8,192 px**: same, for its scattered loose grains
+
+Individual files have no neighbours to bleed in, and 12 of 14 reported zero drops. The pass is unnecessary and harmful for them, so it is now skipped: crop to alpha bbox → scale to 76% → centre. `tools/segment_sheet.py` retains despeckle, correctly, for sheet input.
+
+### Two prior issues resolved by the new renders
+
+1. **`cream` is now a carton, not a bowl.** This closes the curd/cream ambiguity flagged earlier — they had been near-identical white swirls in differently-toned blue bowls, indistinguishable at 34–46 dp. Different silhouettes now.
+2. **`peas-frozen` is loose scattered peas**, no bowl — so it no longer reads like `rice`.
+
+Bowl-based items are down from four to two (`curd`, `rice`), and those two differ in both bowl colour and contents.
+
+### Upload method
+
+The reconnected Figma MCP supports a `nodeIds` array on `upload_assets`, so each image was set as a fill directly on its target component — **14/14 confirmed landing on the intended node**, with no temporary placement frames to create or clean up.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Produce components | 23 |
+| Exactly one image fill per component, no leftover children, all 120×120 | ✅ |
+| Produce instances across 52 screens | 83, **0 broken** |
+| Library-only components (available, not yet placed) | 12 — `capsicum` `carrot` `cauliflower` `cream` `cucumber` `curd` `garlic` `ginger` `lemon` `peas-frozen` `potato` `rice` |
+
+`banana` (Tier 1) was also regenerated as a bunch rather than a single fruit, and replaced.
