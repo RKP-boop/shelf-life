@@ -313,3 +313,21 @@ and a wrong-category fallback) and confirming a non-zero exit, then reverting.
 
 Asset library is now **33 components**: 23 produce renders, 5 category fallbacks,
 5 dish photographs.
+
+## Discrepancy found 2026-08-28
+
+`get_metadata` on file `COwU4NcifaHygTqCHUliS8` lists exactly one page, `Design
+System` (`0:1`), and that canvas contains **only** the component library —
+produce, dish and glyph symbols, icons, chrome, buttons, and the two check
+frames. **None of the 52 screen frames appear.**
+
+The component library is intact and is what the Flutter build actually consumes:
+tokens came out via `design/tokens.json`, and the produce / dish / glyph art was
+exported to PNG and is bundled in the app. So this does not block the build.
+
+What it does mean: the "52 frames at exactly 412 × 915" row in the verification
+gate above cannot be re-verified against this file key as written. The screen
+content for the Flutter build is therefore taken from the spec and the FigJam
+flow board (`VtBS3Rn1WMO9kUvXWkVdV1`), which are the authoritative content
+sources in any case. Screen layout is verified instead by committed golden
+renders under `shelflife_app/test/screens/goldens/`.
