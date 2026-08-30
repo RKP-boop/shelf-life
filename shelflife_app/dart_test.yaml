@@ -1,0 +1,5 @@
+# Golden tests are valid only on the platform that rendered them; CI skips
+# them with --exclude-tags golden. See the header of any test/screens file.
+tags:
+  golden:
+    description: Renders a screen and compares against a committed PNG.

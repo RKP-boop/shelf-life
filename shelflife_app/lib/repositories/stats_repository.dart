@@ -111,4 +111,49 @@ class StatsRepository {
     }
     return length;
   }
+
+  /// The last few things actually used, newest first.
+  ///
+  /// "18 meals rescued" is abstract; "your spinach, on Tuesday" is not, and the
+  /// impact screen needs both.
+  List<({String name, String when, String? glyphKey})> recentRescues({
+    int limit = 5,
+    DateTime? today,
+  }) {
+    final now = today ?? DateTime.now();
+    final events = store
+        .readAll(store.events)
+        .map(ConsumptionEvent.fromJson)
+        .where((e) => e.countsAsRescued)
+        .toList()
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
+    return events.take(limit).map((e) {
+      final ingredient = e.ingredientId == null
+          ? null
+          : store.ingredients.get(e.ingredientId!);
+      return (
+        name: e.productName,
+        when: _whenLabel(e.occurredAt, now),
+        glyphKey: ingredient == null
+            ? null
+            : LocalStore.cast(ingredient)['glyph_key'] as String?,
+      );
+    }).toList();
+  }
+
+  static const _weekdays = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+    'Friday', 'Saturday', 'Sunday',
+  ];
+
+  /// Day names inside the last week, then a date. "Tuesday" is more useful
+  /// than "3 days ago" for something that happened this week.
+  static String _whenLabel(DateTime when, DateTime now) {
+    final days = _dateOnly(now).difference(_dateOnly(when)).inDays;
+    if (days <= 0) return 'Today';
+    if (days == 1) return 'Yesterday';
+    if (days < 7) return _weekdays[when.weekday - 1];
+    return '${when.day}/${when.month}';
+  }
 }

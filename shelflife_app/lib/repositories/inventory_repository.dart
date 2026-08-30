@@ -136,6 +136,7 @@ class InventoryRepository {
       expirySource: estimate.source,
       expiryReason: estimate.reason,
       barcode: barcode,
+      glyphKey: ingredient?.glyphKey,
       createdAt: now,
       updatedAt: now,
     );

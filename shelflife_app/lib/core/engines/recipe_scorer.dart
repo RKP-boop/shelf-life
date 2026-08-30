@@ -77,9 +77,12 @@ class RecipeMatch {
         ? urgentNames.single
         : '${urgentNames.sublist(0, urgentNames.length - 1).join(', ')} '
             'and ${urgentNames.last}';
-    final tail = urgentNames.length == 1
-        ? 'best used today'
-        : 'both best used today';
+    // "both" only holds for exactly two; three or more needs "all".
+    final tail = switch (urgentNames.length) {
+      1 => 'best used today',
+      2 => 'both best used today',
+      _ => 'all best used today',
+    };
     return 'Uses your $names, $tail.';
   }
 }

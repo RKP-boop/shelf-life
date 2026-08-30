@@ -20,6 +20,7 @@ class InventoryItem {
     this.ingredientId,
     this.expiryReason,
     this.barcode,
+    this.glyphKey,
     this.status = ItemStatus.active,
   });
 
@@ -47,6 +48,11 @@ class InventoryItem {
   final String? expiryReason;
 
   final String? barcode;
+
+  /// Denormalised from the ingredient at insert time, so a row can render its
+  /// image offline without a join. Null falls back to the category glyph.
+  final String? glyphKey;
+
   final ItemStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -78,6 +84,7 @@ class InventoryItem {
         expirySource: expirySource ?? this.expirySource,
         expiryReason: expiryReason ?? this.expiryReason,
         barcode: barcode,
+        glyphKey: glyphKey,
         status: status ?? this.status,
         createdAt: createdAt,
         updatedAt: updatedAt ?? DateTime.now(),
@@ -102,6 +109,7 @@ class InventoryItem {
         expirySource: ExpirySourceWire.parse(j['expiry_source'] as String),
         expiryReason: j['expiry_reason'] as String?,
         barcode: j['barcode'] as String?,
+        glyphKey: j['glyph_key'] as String?,
         status: ItemStatus.values.byName(j['status'] as String? ?? 'active'),
         createdAt: DateTime.parse(j['created_at'] as String),
         updatedAt: DateTime.parse(j['updated_at'] as String),
@@ -124,6 +132,8 @@ class InventoryItem {
         'expiry_source': expirySource.wire,
         'expiry_reason': expiryReason,
         'barcode': barcode,
+        // not a Postgres column; local display only
+        if (!forWire) 'glyph_key': glyphKey,
         'status': status.name,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),

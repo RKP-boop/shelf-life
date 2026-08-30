@@ -34,6 +34,32 @@ class Ingredient {
   /// always labelled as an estimate in the UI.
   final double? estPriceInr;
 
+  /// Where this ingredient keeps longest, used to preselect storage on the
+  /// add screens.
+  ///
+  /// Derived rather than stored: the shelf-life columns already encode it, and
+  /// a separate column could disagree with them. Ties go to the fridge, which
+  /// is the right default for the perishables this actually matters for.
+  StorageLocation get suggestedStorage {
+    final options = <StorageLocation, int?>{
+      StorageLocation.fridge: shelfLifeFridgeDays,
+      StorageLocation.pantry: shelfLifePantryDays,
+      StorageLocation.counter: shelfLifeCounterDays,
+      // Deliberately excluded: almost everything lasts longest frozen, so
+      // including it would suggest the freezer for spinach.
+    };
+    StorageLocation best = StorageLocation.fridge;
+    var bestDays = -1;
+    for (final entry in options.entries) {
+      final days = entry.value;
+      if (days != null && days > bestDays) {
+        best = entry.key;
+        bestDays = days;
+      }
+    }
+    return bestDays < 0 ? StorageLocation.pantry : best;
+  }
+
   /// Shelf life for one storage location, or null when the item is not
   /// sensibly kept that way.
   int? shelfLifeFor(StorageLocation storage) => switch (storage) {
