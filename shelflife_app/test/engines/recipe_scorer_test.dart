@@ -33,6 +33,7 @@ Map<String, DateTime> holding(Map<String, int> daysFromToday) => {
     };
 
 void main() {
+  _urgencyLinePluralisation();
   const scorer = RecipeScorer();
 
   group('the formula (spec §5.2)', () {
@@ -173,6 +174,39 @@ void main() {
         recipe('Apple', 30, [('a', false)]),
       ], kitchen, today: today);
       expect(ranked.map((r) => r.name), ['Apple', 'Zebra']);
+    });
+  });
+}
+
+void _urgencyLinePluralisation() {
+  RecipeMatch m(List<String> urgent) => RecipeMatch(
+        id: 'r',
+        name: 'Test',
+        prepMinutes: 10,
+        imageKey: null,
+        totalRequired: 4,
+        haveCount: 4,
+        haveNames: const [],
+        missingNames: const [],
+        urgentNames: urgent,
+        score: 1,
+      );
+
+  group('urgencyLine pluralisation', () {
+    test('says nothing when nothing is urgent', () {
+      expect(m(const []).urgencyLine, isNull);
+    });
+    test('one name takes no quantifier', () {
+      expect(m(const ['spinach']).urgencyLine,
+          'Uses your spinach, best used today.');
+    });
+    test('two names take "both"', () {
+      expect(m(const ['spinach', 'paneer']).urgencyLine,
+          'Uses your spinach and paneer, both best used today.');
+    });
+    test('three names take "all", not "both"', () {
+      expect(m(const ['spinach', 'paneer', 'tomato']).urgencyLine,
+          'Uses your spinach, paneer and tomato, all best used today.');
     });
   });
 }

@@ -12,6 +12,7 @@ Exit:   0 all passed, 1 one or more failed
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 import time
@@ -245,6 +246,48 @@ def main() -> int:
                               "contributed_by": uid, "verified": True})
             check("cannot pass a contribution off as verified", status in (401, 403),
                   f"status {status}")
+
+            # ------------------------------- 6b deterministic reference ids
+            #
+            # The single most consequential thing in the whole schema for the
+            # app: `inventory_items.ingredient_id` is written on a phone that
+            # may never have reached the server, against an id the app derived
+            # itself. If Postgres and the app disagree, every queued insert
+            # fails its foreign key on first sync -- on a real device, after
+            # the user has already added their shopping.
+            #
+            # Migration 006 makes both sides compute md5(natural key).
+            print("\n6b. reference ids are deterministic (migration 006)")
+            expected = {
+                name: hashlib.md5(name.encode()).hexdigest()
+                for name in ("spinach", "paneer", "onion", "tomato")
+            }
+            _, id_rows = call("GET",
+                "/rest/v1/ingredients?select=id,canonical_name"
+                "&canonical_name=in.(spinach,paneer,onion,tomato)", tok_a)
+            if isinstance(id_rows, list) and len(id_rows) == 4:
+                mismatched = [
+                    r["canonical_name"] for r in id_rows
+                    if r["id"].replace("-", "") != expected[r["canonical_name"]]
+                ]
+                check("ingredient ids are md5(canonical_name)",
+                      not mismatched,
+                      "run migration 006; mismatched: " + ", ".join(mismatched)
+                      if mismatched else "")
+            else:
+                check("ingredient ids are md5(canonical_name)", False,
+                      "could not read the four probe ingredients")
+
+            _, recipe_rows = call("GET",
+                "/rest/v1/recipes?select=id,name&name=eq.Palak%20Paneer", tok_a)
+            if isinstance(recipe_rows, list) and recipe_rows:
+                got = recipe_rows[0]["id"].replace("-", "")
+                want = hashlib.md5(b"palak paneer").hexdigest()
+                check("recipe ids are md5(lower(name))", got == want,
+                      "run migration 006" if got != want else "")
+            else:
+                check("recipe ids are md5(lower(name))", False,
+                      "Palak Paneer not found")
 
             # ------------------------------------------------- 7 match_recipes
             print("\n7. match_recipes")
