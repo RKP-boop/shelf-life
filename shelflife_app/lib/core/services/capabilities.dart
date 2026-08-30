@@ -184,28 +184,107 @@ abstract interface class ConnectivityService {
 }
 
 class FakeConnectivityService implements ConnectivityService {
-  FakeConnectivityService({bool online = true}) : _online = online;
+  FakeConnectivityService({this.online = true});
 
-  // Not an initializing formal: the public setter below has to notify the
-  // stream, so the field and the parameter cannot be the same thing.
-  // ignore: prefer_initializing_formals
-  bool _online;
-
-  /// Flip this in a test to exercise the offline banner and the queue drain.
-  set online(bool v) {
-    _online = v;
-    _controller.add(v);
-  }
+  bool online;
 
   final _controller = StreamController<bool>.broadcast();
 
+  /// Flip connectivity in a test, to exercise the offline banner and the
+  /// queue drain. A method rather than a setter because it has the side
+  /// effect of notifying listeners.
+  void setOnline(bool value) {
+    online = value;
+    _controller.add(value);
+  }
+
   @override
-  Future<bool> get isOnline async => _online;
+  Future<bool> get isOnline async => online;
 
   @override
   Stream<bool> get onChanged => _controller.stream;
 
   void dispose() => _controller.close();
+}
+
+// ------------------------------------------------------------ google auth
+
+/// What Supabase needs to establish a session from a Google sign-in.
+class GoogleCredential {
+  const GoogleCredential({
+    required this.idToken,
+    required this.email,
+    this.displayName,
+  });
+
+  /// The Google-issued ID token. Supabase verifies this server-side against
+  /// the OAuth client, which is why nothing here has to be trusted.
+  final String idToken;
+
+  final String email;
+  final String? displayName;
+}
+
+/// Why a sign-in did not produce a credential.
+///
+/// `cancelled` is separate from the rest because it is not a failure: the user
+/// backed out, and showing them a message about it would be wrong.
+enum GoogleAuthOutcome { cancelled, notConfigured, unavailable, refused }
+
+class GoogleAuthResult {
+  const GoogleAuthResult.success(this.credential) : outcome = null;
+  const GoogleAuthResult.failed(this.outcome) : credential = null;
+
+  final GoogleCredential? credential;
+  final GoogleAuthOutcome? outcome;
+
+  bool get ok => credential != null;
+}
+
+abstract interface class GoogleAuthService {
+  /// True when the build has an OAuth client id and the platform supports the
+  /// native flow. The button is hidden entirely when this is false rather than
+  /// shown and then failing on tap.
+  bool get isAvailable;
+
+  Future<GoogleAuthResult> signIn();
+
+  Future<void> signOut();
+}
+
+/// Unavailable by default, so tests and web builds simply do not offer the
+/// button. Set [available] to exercise the wired-up path.
+class FakeGoogleAuthService implements GoogleAuthService {
+  FakeGoogleAuthService({
+    this.available = false,
+    this.outcome,
+    this.credential = const GoogleCredential(
+      idToken: 'fake-id-token',
+      email: 'someone@example.com',
+      displayName: 'Someone',
+    ),
+  });
+
+  bool available;
+
+  /// When set, signIn reports this instead of succeeding.
+  GoogleAuthOutcome? outcome;
+
+  GoogleCredential credential;
+
+  @override
+  bool get isAvailable => available;
+
+  @override
+  Future<GoogleAuthResult> signIn() async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    return outcome == null
+        ? GoogleAuthResult.success(credential)
+        : GoogleAuthResult.failed(outcome!);
+  }
+
+  @override
+  Future<void> signOut() async {}
 }
 
 /// Registry, so screens depend on the interfaces rather than on plugins.
@@ -218,6 +297,7 @@ class Capabilities {
     required this.camera,
     required this.notifications,
     required this.connectivity,
+    required this.googleAuth,
   });
 
   factory Capabilities.fakes() => Capabilities(
@@ -226,6 +306,7 @@ class Capabilities {
         camera: FakeCameraService(),
         notifications: FakeNotificationScheduler(),
         connectivity: FakeConnectivityService(),
+        googleAuth: FakeGoogleAuthService(),
       );
 
   final OcrService ocr;
@@ -233,4 +314,5 @@ class Capabilities {
   final CameraService camera;
   final NotificationScheduler notifications;
   final ConnectivityService connectivity;
+  final GoogleAuthService googleAuth;
 }

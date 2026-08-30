@@ -1,4 +1,4 @@
-package com.shelflife.shelflife_app
+package com.shelflife.app
 
 import io.flutter.embedding.android.FlutterActivity
 
