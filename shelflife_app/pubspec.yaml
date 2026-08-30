@@ -40,6 +40,19 @@ dependencies:
   connectivity_plus: ^7.3.1
   intl: ^0.20.3
   path_provider: ^2.1.6
+  # Declared directly rather than relied on transitively: the reminder ledger
+  # derives its row ids from md5, and a transitive dep can disappear.
+  crypto: ^3.0.7
+  # Native capability plugins. Each sits behind an interface in
+  # core/services/capabilities.dart with a fake, so tests and web builds never
+  # touch them.
+  camera: ^0.11.2
+  google_mlkit_text_recognition: ^0.16.0
+  mobile_scanner: ^7.1.4
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.1
+  permission_handler: ^12.0.1
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +75,26 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Bundled, not fetched at runtime: the app is offline-first, so a cold start
+  # must never wait on Google Fonts.
+  assets:
+    - assets/produce/
+    - assets/glyph/
+    - assets/dish/
+    - assets/seed/
+
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:
