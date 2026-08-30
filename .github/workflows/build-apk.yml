@@ -1,0 +1,115 @@
+# Builds the release APKs.
+#
+# This exists because Windows Smart App Control blocks Flutter's `gen_snapshot`
+# — an unsigned binary — on the machine this project was developed on, which
+# makes a local ARM release build impossible without an irreversible security
+# change. An Ubuntu runner has no such restriction.
+#
+# It also serves as a real check: analyzer, tests and the project's guards all
+# run before anything is packaged, so a broken build never produces an artifact.
+
+name: Build APK
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push supersedes an in-flight build of the same branch.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to the version the project was developed and tested against.
+  # Floating on "stable" means a Flutter release can break the build on a day
+  # nobody touched the code.
+  FLUTTER_VERSION: 3.47.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: shelflife_app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: shelflife_app
+        run: flutter analyze
+
+      - name: Test
+        working-directory: shelflife_app
+        # Goldens are excluded deliberately: they are font-rasterisation
+        # dependent and the committed images were rendered on Windows, so they
+        # fail here for reasons unrelated to the code. Everything else runs —
+        # engines, repositories, sync queue, seed contract and the copy rules.
+        run: flutter test --exclude-tags golden
+
+      - name: Design and data guards
+        run: |
+          python tools/check_contrast.py
+          python tools/check_asset_coverage.py
+
+      # The three values below are all meant to ship inside a client app: the
+      # Supabase publishable key is protected by row-level security, and the
+      # Google *web client id* is public by design. The Google client SECRET is
+      # not among them — that lives in Supabase and must never reach a build.
+      #
+      # Missing GOOGLE_WEB_CLIENT_ID is not an error: the app builds and simply
+      # hides the Google button.
+      - name: Build release APKs
+        working-directory: shelflife_app
+        run: |
+          flutter build apk --release --split-per-abi \
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="${{ secrets.GOOGLE_WEB_CLIENT_ID }}"
+
+      - name: Audit the APK
+        # Resolves the manifest's launcher activity against the dex, checks the
+        # dart-defines actually landed, and refuses to pass if any secret
+        # material is inside the file. A build that fails this must not ship.
+        run: |
+          python tools/audit_apk.py \
+            shelflife_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Name the artifacts for humans
+        run: |
+          mkdir -p dist
+          cd shelflife_app/build/app/outputs/flutter-apk
+          cp app-arm64-v8a-release.apk    "$GITHUB_WORKSPACE/dist/shelflife.apk"
+          cp app-armeabi-v7a-release.apk  "$GITHUB_WORKSPACE/dist/shelflife-older-phones.apk"
+          ls -lh "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: shelflife-apk
+          path: dist/*.apk
+          # Long enough to be useful, short enough not to hoard 90MB forever.
+          retention-days: 30
+          if-no-files-found: error
