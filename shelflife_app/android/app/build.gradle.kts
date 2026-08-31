@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.File
 import java.io.FileInputStream
 
 plugins {
@@ -18,6 +19,24 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKey = keystorePropertiesFile.exists()
 if (hasReleaseKey) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+/// Resolves `storeFile` relative to key.properties, not to the app module.
+///
+/// This is the fix for a CI failure that cost an eleven-minute build. The
+/// workflow writes `storeFile=release.jks` beside key.properties in `android/`,
+/// but `file(path)` inside `app/build.gradle.kts` resolves against
+/// `android/app/` -- so Gradle looked for `android/app/release.jks`, found
+/// nothing, and failed at `validateSigningRelease` *after* compiling
+/// everything. It never showed up locally because a local key.properties
+/// written by tools/setup_signing.py holds an absolute path.
+///
+/// A path written in a file should be relative to that file. Anything else is a
+/// trap for whoever writes the next one by hand.
+fun resolveKeystore(path: String): File {
+    val candidate = File(path)
+    return if (candidate.isAbsolute) candidate
+    else File(keystorePropertiesFile.parentFile, path)
 }
 
 android {
@@ -48,8 +67,26 @@ android {
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
                 storePassword = keystoreProperties["storePassword"] as String
+
+                val declared = keystoreProperties["storeFile"] as String?
+                    ?: throw GradleException(
+                        "android/key.properties exists but has no storeFile. " +
+                        "Delete the file to build debug-signed, or point it at " +
+                        "the keystore.")
+                val resolved = resolveKeystore(declared)
+                // Fail now, at configuration time, rather than after Gradle has
+                // compiled the whole app and reached validateSigningRelease.
+                if (!resolved.exists()) {
+                    throw GradleException(
+                        "The signing keystore is missing.\n" +
+                        "  key.properties says : " + declared + "\n" +
+                        "  which resolves to   : " + resolved.absolutePath + "\n" +
+                        "A relative path here is taken relative to " +
+                        "android/key.properties. Fix the path, or delete " +
+                        "key.properties to build debug-signed.")
+                }
+                storeFile = resolved
             }
         }
     }
