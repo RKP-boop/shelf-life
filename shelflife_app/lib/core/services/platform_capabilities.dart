@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -202,6 +203,28 @@ class DeviceCameraService implements CameraService {
     try {
       final shot = await _controller!.takePicture();
       return await shot.readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Opens the system photo picker.
+  ///
+  /// Android 13+ routes this through the Photo Picker, which needs no storage
+  /// permission at all — the user chooses exactly one image and the app never
+  /// gains access to the rest of the library. That is why there is no
+  /// READ_MEDIA_IMAGES in the manifest.
+  @override
+  Future<Uint8List?> pickFromGallery() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        // OCR needs resolution; a downscaled receipt loses the small print
+        // that carries the item lines.
+        maxWidth: 2400,
+        imageQuality: 92,
+      );
+      return file == null ? null : await file.readAsBytes();
     } catch (_) {
       return null;
     }

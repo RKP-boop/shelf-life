@@ -23,6 +23,7 @@ import '../models/models.dart';
 import '../repositories/inventory_repository.dart';
 import '../repositories/repositories.dart';
 import '../repositories/stats_repository.dart';
+import '../services/product_lookup.dart';
 import '../services/reminder_service.dart';
 import '../services/sync_service.dart';
 
@@ -52,6 +53,7 @@ class AppState extends ChangeNotifier {
     required this.sync,
     required this.capabilities,
     required this.reminders,
+    required this.productLookup,
   })  : inventory = InventoryRepository(store: store, queue: queue),
         reference = ReferenceRepository(store: store),
         shopping = ShoppingRepository(
@@ -70,6 +72,7 @@ class AppState extends ChangeNotifier {
 
   final Capabilities capabilities;
   final ReminderService reminders;
+  final ProductLookupService productLookup;
 
   OcrService get ocr => capabilities.ocr;
   GoogleAuthService get googleAuth => capabilities.googleAuth;
@@ -529,6 +532,79 @@ class AppState extends ChangeNotifier {
     final days = hours ~/ 24;
     return "$days ${days == 1 ? "day" : "days"} ago";
   }
+
+
+  // ------------------------------------------------------------- barcodes
+
+  /// Resolves a barcode: local cache, then Open Food Facts, then give up.
+  ///
+  /// Cache first is not an optimisation, it is the offline-first rule — the
+  /// seeded rows and anything this user has taught the app answer instantly
+  /// with no connection. The network is only consulted on a miss.
+  ///
+  /// A network hit is written to the local cache and queued for the shared
+  /// `products` table, so the next person to scan it gets a cache hit.
+  Future<({Product? product, ProductSource source})> resolveBarcode(
+      String barcode) async {
+    final cached = reference.productByBarcode(barcode);
+    if (cached != null) {
+      return (product: cached, source: ProductSource.cache);
+    }
+
+    final hit = await productLookup.byBarcode(barcode);
+    if (!hit.found) return (product: null, source: hit.source);
+
+    // Resolve the looked-up name against the catalogue so the item still gets
+    // a real shelf life rather than the category default.
+    final ingredient = _resolve(hit.productName!) ??
+        (hit.brand == null ? null : _resolve(hit.brand!));
+
+    final product = Product(
+      barcode: barcode,
+      productName: hit.productName!,
+      brand: hit.brand,
+      ingredientId: ingredient?.id,
+      category: hit.category ?? ingredient?.category,
+      packSize: hit.packSize,
+      // Not verified: it came from a public database, not from us. The column
+      // exists precisely so a contributed row cannot masquerade as seeded.
+      verified: false,
+    );
+
+    await _cacheProduct(product);
+    return (product: product, source: ProductSource.network);
+  }
+
+  /// Writes a product to the local cache and queues it for the shared table.
+  Future<void> _cacheProduct(Product product) async {
+    await store.products.put(product.barcode, product.toJson());
+    if (!isGuest) {
+      await queue.enqueue(
+        op: SyncOp.insert,
+        table: SyncTable.products,
+        rowId: product.barcode,
+        payload: product.toJson(forWire: true),
+      );
+      sync.nudge();
+    }
+    notifyListeners();
+  }
+
+  /// Called when the user tells us what an unknown barcode is. The same cache
+  /// path, so the next scan is instant either way.
+  Future<void> rememberBarcode({
+    required String barcode,
+    required String productName,
+    String? ingredientId,
+    FoodCategory? category,
+  }) =>
+      _cacheProduct(Product(
+        barcode: barcode,
+        productName: productName,
+        ingredientId: ingredientId,
+        category: category,
+        verified: false,
+      ));
 
   // ------------------------------------------------------------ settings
 

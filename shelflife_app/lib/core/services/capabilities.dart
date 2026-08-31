@@ -103,6 +103,13 @@ abstract interface class CameraService {
 
   /// JPEG bytes, or null if the user cancelled.
   Future<Uint8List?> capture();
+
+  /// Picks an existing photo instead of taking one.
+  ///
+  /// Worth having as a first-class path, not a convenience: people photograph
+  /// the receipt at the till and add it to the app later, at which point the
+  /// slip is in the bin. Null when they back out of the picker.
+  Future<Uint8List?> pickFromGallery();
 }
 
 class FakeCameraService implements CameraService {
@@ -115,6 +122,9 @@ class FakeCameraService implements CameraService {
 
   @override
   Future<bool> requestPermission() async => granted;
+
+  @override
+  Future<Uint8List?> pickFromGallery() => capture();
 
   @override
   Future<Uint8List?> capture() async {

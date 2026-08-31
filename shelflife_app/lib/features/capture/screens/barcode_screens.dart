@@ -340,9 +340,15 @@ class BarcodeUnknownScreen extends StatelessWidget {
     this.onAddByHand,
     this.onScanAnother,
     this.onBack,
+    this.offline = false,
   });
 
   final String barcode;
+
+  /// True when the lookup could not reach the internet, as opposed to reaching
+  /// it and finding nothing. Different situations deserve different copy: one
+  /// is worth retrying later, the other is not.
+  final bool offline;
   final VoidCallback? onAddByHand;
   final VoidCallback? onScanAnother;
   final VoidCallback? onBack;
@@ -364,10 +370,17 @@ class BarcodeUnknownScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 26),
-              const ScreenTitle(
-                ['New one', 'on us'],
-                subtitle: 'We have not seen this barcode before. Tell us what '
-                    'it is once and we will remember it for next time.',
+              ScreenTitle(
+                offline
+                    ? const ['Cannot look', 'that one up']
+                    : const ['New one', 'on us'],
+                subtitle: offline
+                    ? 'No connection, so we could not check what this is. Tell '
+                        'us and we will remember it — or try again once you '
+                        'are back online.'
+                    : 'We have not seen this barcode before, and it is not in '
+                        'the open product database either. Tell us what it is '
+                        'once and we will remember it for next time.',
               ),
               const SizedBox(height: 18),
               Row(children: [Pill(barcode, icon: Icons.qr_code_2)]),

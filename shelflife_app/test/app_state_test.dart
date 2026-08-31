@@ -12,6 +12,7 @@ import 'package:shelflife_app/core/services/capabilities.dart';
 import 'package:shelflife_app/database/local_store.dart';
 import 'package:shelflife_app/database/sync_queue.dart';
 import 'package:shelflife_app/models/enums.dart';
+import 'package:shelflife_app/services/product_lookup.dart';
 import 'package:shelflife_app/services/reminder_service.dart';
 import 'package:shelflife_app/services/sync_service.dart';
 
@@ -21,6 +22,7 @@ void main() {
   late LocalStore store;
   late AppState app;
   late Capabilities capabilities;
+  late FakeProductLookup lookup;
 
   setUp(() async {
     store = await openTestStore();
@@ -41,6 +43,9 @@ void main() {
         scheduler: capabilities.notifications,
         store: store,
       ),
+      // Misses by default, so these tests exercise the ask-the-user path and
+      // never touch the network.
+      productLookup: lookup = FakeProductLookup(),
     );
 
     // A minimal catalogue rather than the full asset: rootBundle is awkward in
@@ -230,6 +235,74 @@ void main() {
       expect(scheduler.scheduled, isNotEmpty,
           reason: 'otherwise nothing already in the kitchen is ever '
               'reminded about');
+    });
+  });
+
+
+  group('barcodes', () {
+    test('a cached barcode never reaches the network', () async {
+      // Offline-first is the rule, not an optimisation: the seeded rows and
+      // anything this user has taught the app must answer with no connection.
+      await store.products.put('8901030865278', {
+        'barcode': '8901030865278',
+        'product_name': 'Amul Taaza',
+        'brand': 'Amul',
+        'ingredient_id': 'ing-spinach',
+        'category': 'dairy',
+        'pack_size': '1 L',
+        'verified': true,
+      });
+
+      final out = await app.resolveBarcode('8901030865278');
+      expect(out.product?.productName, 'Amul Taaza');
+      expect(out.source, ProductSource.cache);
+      expect(lookup.asked, isEmpty,
+          reason: 'the lookup must not be consulted on a cache hit');
+    });
+
+    test('a miss falls through to the lookup', () async {
+      final out = await app.resolveBarcode('9999999999999');
+      expect(out.product, isNull);
+      expect(lookup.asked, ['9999999999999']);
+    });
+
+    test('a lookup hit is cached, so the next scan is instant', () async {
+      lookup.result = const ProductLookupResult(
+        source: ProductSource.network,
+        productName: 'Britannia Marie Gold',
+        brand: 'Britannia',
+        packSize: '250 g',
+        category: FoodCategory.pantry,
+      );
+
+      final first = await app.resolveBarcode('8901063011229');
+      expect(first.product?.productName, 'Britannia Marie Gold');
+      expect(first.source, ProductSource.network);
+
+      final second = await app.resolveBarcode('8901063011229');
+      expect(second.source, ProductSource.cache);
+      expect(lookup.asked, hasLength(1),
+          reason: 'the second scan must not hit the network again');
+    });
+
+    test('a looked-up product is never marked verified', () async {
+      // It came from a public database, not from us. The column exists so a
+      // contributed row cannot masquerade as seeded reference data.
+      lookup.result = const ProductLookupResult(
+        source: ProductSource.network,
+        productName: 'Something',
+      );
+      final out = await app.resolveBarcode('123');
+      expect(out.product!.verified, isFalse);
+    });
+
+    test('what the user teaches us is remembered', () async {
+      // Screen 22 promises exactly this.
+      await app.rememberBarcode(
+          barcode: '555', productName: 'Homemade pickle');
+      final out = await app.resolveBarcode('555');
+      expect(out.source, ProductSource.cache);
+      expect(out.product?.productName, 'Homemade pickle');
     });
   });
 

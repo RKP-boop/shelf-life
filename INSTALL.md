@@ -120,6 +120,31 @@ Exits 1 if anything is wrong. It checks four things:
 
 Run it on the exact file you are about to send, every time.
 
+### Google sign-in needs a real signing key when built in CI
+
+Not optional, and the reason is unobvious. With no keystore, Gradle signs with
+a debug key — and a GitHub runner generates its *own*, different from any
+developer machine. Google binds an Android OAuth client to one signing
+certificate, so a debug-signed CI build fails Google sign-in no matter which
+SHA-1 you registered. The first CI APK was signed `65:43:FC:15…` while
+`18:98:3E:8B…` was registered; that is the whole bug.
+
+So: create the keystore, push it to Actions, register *its* SHA-1.
+
+```bash
+# 1. create it (you choose the password; keep the file safe forever)
+keytool -genkey -v -keystore "$HOME/shelflife-release.jks"   -keyalg RSA -keysize 2048 -validity 10000 -alias shelflife
+
+# 2. write shelflife_app/android/key.properties (gitignored) pointing at it
+
+# 3. push it to Actions as encrypted secrets -- the password is read from the
+#    file and never printed
+python tools/upload_signing_secrets.py
+
+# 4. get the fingerprint and register it with the Android OAuth client
+python tools/signing_fingerprints.py
+```
+
 ### Google sign-in
 
 Off by default. The button only appears when the build is given

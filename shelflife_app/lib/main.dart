@@ -30,6 +30,7 @@ import 'database/sync_queue.dart';
 import 'features/auth/screens/auth_page.dart';
 import 'features/auth/screens/auth_screens.dart';
 import 'features/onboarding/screens/value_prop_screen.dart';
+import 'services/product_lookup.dart';
 import 'services/reminder_service.dart';
 import 'services/seed.dart';
 import 'services/sync_service.dart';
@@ -83,6 +84,7 @@ Future<AppState> _bootstrap() async {
     sync: sync,
     capabilities: capabilities,
     reminders: reminders,
+    productLookup: OpenFoodFactsLookup(),
   );
 
   // Restore an existing session before the first frame, so a signed-in user

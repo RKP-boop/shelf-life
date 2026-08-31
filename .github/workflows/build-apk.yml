@@ -74,6 +74,40 @@ jobs:
           python tools/check_contrast.py
           python tools/check_asset_coverage.py
 
+      # Release signing.
+      #
+      # This matters more than it looks. Without a keystore, Gradle falls back
+      # to a debug key -- and a GitHub runner generates its OWN debug keystore,
+      # different from any developer machine and potentially different per run.
+      # Google ties an Android OAuth client to a specific signing certificate,
+      # so a debug-signed CI build fails Google sign-in no matter which SHA-1
+      # you registered. A stable release key is the only way to make sign-in
+      # work on a CI-built APK.
+      #
+      # Absent secrets are not an error: the build falls back to debug signing
+      # and says so, which is fine for checking that the code compiles.
+      - name: Decode the release keystore
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::No signing keystore. Building debug-signed -- Google sign-in will NOT work on this APK."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > shelflife_app/android/release.jks
+          # printf, not a heredoc: inside a YAML block scalar a heredoc keeps
+          # the YAML indentation, and every line of key.properties would arrive
+          # with leading spaces.
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=release.jks\n' \
+            "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" \
+            > shelflife_app/android/key.properties
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
       # The three values below are all meant to ship inside a client app: the
       # Supabase publishable key is protected by row-level security, and the
       # Google *web client id* is public by design. The Google client SECRET is
@@ -96,6 +130,26 @@ jobs:
         run: |
           python tools/audit_apk.py \
             shelflife_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+
+      - name: Report the signing fingerprint
+        # Printed so the SHA-1 registered with Google can be checked against
+        # what actually signed the APK -- the mismatch that silently breaks
+        # Google sign-in.
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)
+          APK=shelflife_app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          "$BT/apksigner" verify --print-certs "$APK" | grep -i "SHA-1" || true
+          if [ "${{ steps.signing.outputs.signed }}" != "true" ]; then
+            echo "::warning::Debug-signed. Register this SHA-1 with Google, or add the signing secrets."
+          fi
+
+      - name: Remove the keystore from the runner
+        if: always()
+        # Belt and braces: runners are ephemeral, but a key should never be
+        # left lying about even for a few seconds after it is needed.
+        run: |
+          rm -f shelflife_app/android/release.jks
+          rm -f shelflife_app/android/key.properties
 
       - name: Name the artifacts for humans
         run: |

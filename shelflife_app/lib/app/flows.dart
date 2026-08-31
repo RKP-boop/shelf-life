@@ -6,6 +6,8 @@
 // test — and the sequence of a flow is readable in one place instead of being
 // reconstructed by following callbacks between files.
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../core/engines/receipt_parser.dart';
@@ -26,6 +28,7 @@ import '../features/shopping/screens/shopping_screens.dart';
 import '../models/enums.dart';
 import '../models/inventory_item.dart';
 import '../models/models.dart';
+import '../services/product_lookup.dart';
 import '../services/sync_service.dart';
 import 'app_scope.dart';
 import 'shell.dart';
@@ -183,16 +186,26 @@ class _ReceiptFlowRouteState extends State<_ReceiptFlowRoute> {
   String _soonestName = '';
   int _soonestDays = 0;
 
-  Future<void> _capture() async {
+  /// Shutter: take a photo, then read it.
+  Future<void> _capture() =>
+      _readImage(() => AppScope.read(context).camera.capture());
+
+  /// Everything after an image is obtained: OCR, parse, estimate, review.
+  ///
+  /// Both the shutter and the gallery route through here, taking the image
+  /// source as a callback. Two copies of this pipeline is how the gallery path
+  /// ends up quietly behind on a parser fix.
+  Future<void> _readImage(Future<Uint8List?> Function() source) async {
     final app = AppScope.read(context);
     setState(() {
       _stage = _ReceiptStage.reading;
       _step = ReadingStep.reading;
     });
 
-    final bytes = await app.camera.capture();
+    final bytes = await source();
     if (!mounted) return;
     if (bytes == null) {
+      // Backing out of the camera or the picker is not a failure.
       setState(() => _stage = _ReceiptStage.camera);
       return;
     }
@@ -224,6 +237,11 @@ class _ReceiptFlowRouteState extends State<_ReceiptFlowRoute> {
       _stage = _ReceiptStage.review;
     });
   }
+
+  /// The gallery path. Shares everything after the image is obtained with the
+  /// shutter path, so OCR, parsing and review cannot diverge between them.
+  Future<void> _pickFromGallery() =>
+      _readImage(() => AppScope.read(context).camera.pickFromGallery());
 
   Future<void> _toggleTorch() async {
     final camera = AppScope.read(context).camera;
@@ -290,7 +308,7 @@ class _ReceiptFlowRouteState extends State<_ReceiptFlowRoute> {
           onToggleTorch: _toggleTorch,
           onBack: () => Navigator.of(context).pop(),
           onShutter: _capture,
-          onGallery: _capture,
+          onGallery: _pickFromGallery,
         ),
       _ReceiptStage.reading => ReadingReceiptScreen(
           step: _step,
@@ -363,6 +381,16 @@ class _BarcodeFlowRoute extends StatefulWidget {
 class _BarcodeFlowRouteState extends State<_BarcodeFlowRoute> {
   Product? _found;
   String? _unknownCode;
+
+  /// The barcode currently being looked up, or null. Drives the interstitial.
+  String? _looking;
+
+  /// Why a lookup missed, so screen 22 can distinguish "we do not know this
+  /// product" from "we could not reach the internet to ask".
+  ProductSource? _missReason;
+
+  /// Whether the answer came from the local cache rather than the network.
+  bool _fromCache = true;
   bool _torch = false;
   int _quantity = 1;
   StorageLocation _storage = StorageLocation.fridge;
@@ -377,19 +405,30 @@ class _BarcodeFlowRouteState extends State<_BarcodeFlowRoute> {
     final app = AppScope.read(context);
     await for (final result in app.barcode.scan()) {
       if (!mounted) return;
-      final product = app.reference.productByBarcode(result.value);
+      await app.barcode.stop();
+
+      // Cache first, then Open Food Facts. The lookup can touch the network,
+      // so the screen says it is working rather than appearing to freeze on
+      // the frame that just scanned.
+      setState(() => _looking = result.value);
+      final outcome = await app.resolveBarcode(result.value);
+      if (!mounted) return;
+
       setState(() {
+        _looking = null;
+        final product = outcome.product;
         if (product == null) {
           _unknownCode = result.value;
+          _missReason = outcome.source;
         } else {
           _found = product;
+          _fromCache = outcome.source == ProductSource.cache;
           _storage = app.reference
                   .ingredientById(product.ingredientId ?? '')
                   ?.suggestedStorage ??
               StorageLocation.fridge;
         }
       });
-      await app.barcode.stop();
       return;
     }
   }
@@ -398,9 +437,17 @@ class _BarcodeFlowRouteState extends State<_BarcodeFlowRoute> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
 
+    if (_looking != null) {
+      return ReadingReceiptScreen(
+        step: ReadingStep.matching,
+        onCancel: () => Navigator.of(context).pop(),
+      );
+    }
+
     if (_unknownCode != null) {
       return BarcodeUnknownScreen(
         barcode: _unknownCode!,
+        offline: _missReason == ProductSource.offline,
         onBack: () => Navigator.of(context).pop(),
         onScanAnother: () {
           setState(() => _unknownCode = null);
@@ -456,6 +503,7 @@ class _BarcodeFlowRouteState extends State<_BarcodeFlowRoute> {
       storage: _storage,
       onQuantityChanged: (v) => setState(() => _quantity = v),
       onStorageChanged: (s) => setState(() => _storage = s),
+      fromCache: _fromCache,
       onBack: () => Navigator.of(context).pop(),
       onEditExpiry: () {
         Navigator.of(context).pop();
@@ -529,6 +577,15 @@ class _AddByHandRouteState extends State<_AddByHandRoute> {
           storage: storage,
           barcode: widget.barcode,
         );
+        // Screen 22 promised we would remember it. Cache the barcode so the
+        // next scan resolves instantly, and share it so others benefit.
+        if (widget.barcode != null) {
+          await app.rememberBarcode(
+            barcode: widget.barcode!,
+            productName: name,
+            category: category,
+          );
+        }
         if (!context.mounted) return;
         await Flows.maybeAskForNotifications(context, app.allItems.last);
         if (context.mounted) Navigator.of(context).pop();
