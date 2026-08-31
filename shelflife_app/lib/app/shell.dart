@@ -171,7 +171,7 @@ class _AppShellState extends State<AppShell> {
         onAccount: () => Flows.openAccount(context),
         onAbout: () => Flows.openAbout(context),
         onSignOut: () => Flows.confirmSignOut(context),
-        onCreateAccount: () => Flows.openSignUp(context),
+        onSignIn: () => Flows.signInWithGoogle(context),
       );
 
   static SyncState _syncState(AppState app) {

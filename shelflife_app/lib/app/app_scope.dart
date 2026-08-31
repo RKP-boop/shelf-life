@@ -336,60 +336,12 @@ class AppState extends ChangeNotifier {
 
   SupabaseClient? get _auth => sync.client;
 
-  /// Creates the account and takes over any rows added in guest mode.
-  Future<String?> signUp({
-    required String email,
-    required String password,
-    String? name,
-  }) async {
-    final api = _auth;
-    if (api == null) return _noBackend;
-    try {
-      final res = await api.auth.signUp(email: email, password: password);
-      if (res.user == null) {
-        return "That did not go through. Check the address and try again.";
-      }
-      // Deliberately not adopting yet. The account is unconfirmed until the
-      // code is entered, and moving guest rows onto an account that may never
-      // be confirmed would strand them. Remember the name so the verify step
-      // can use it.
-      if (name != null && name.isNotEmpty) {
-        await store.meta.put('display_name', name);
-      }
-      return null;
-    } on AuthException catch (e) {
-      return _humaniseAuth(e);
-    } catch (_) {
-      return _unreachable;
-    }
-  }
-
-  Future<String?> signIn({
-    required String email,
-    required String password,
-  }) async {
-    final api = _auth;
-    if (api == null) return _noBackend;
-    try {
-      final res = await api.auth
-          .signInWithPassword(email: email, password: password);
-      final id = res.user?.id;
-      if (id == null) {
-        return "That email and password do not match. Try again, or reset "
-            "your password.";
-      }
-      await _adopt(id, email: email);
-      return null;
-    } on AuthException catch (e) {
-      return _humaniseAuth(e);
-    } catch (_) {
-      return _unreachable;
-    }
-  }
-
-
-  /// Signs in with Google and adopts any guest rows, exactly as the email
-  /// path does.
+  /// Signs in with Google and adopts any rows added in guest mode.
+  ///
+  /// The only account path in the app. Email sign-up was removed because the
+  /// Supabase project cannot send a confirmation code -- template editing is
+  /// gated behind custom SMTP, the default template carries a link and no
+  /// token, and the send limit is two emails an hour project-wide.
   ///
   /// Returns null on success, null again if the user simply backed out of the
   /// account picker, and a sentence otherwise. Cancelling deliberately looks
@@ -403,15 +355,17 @@ class AppState extends ChangeNotifier {
     if (!result.ok) {
       return switch (result.outcome!) {
         GoogleAuthOutcome.cancelled => null,
+        // No fallback to suggest any more, so each of these says what to do
+        // instead of naming a path that no longer exists.
         GoogleAuthOutcome.notConfigured =>
-          "Google sign-in is not set up in this build. Email and password "
-              "work as usual.",
+          "Google sign-in is not set up in this build. You can carry on "
+              "without an account.",
         GoogleAuthOutcome.unavailable =>
-          "Google sign-in is not available on this phone. You can use email "
-              "and password instead.",
+          "Google sign-in is not available on this phone. You can carry on "
+              "without an account.",
         GoogleAuthOutcome.refused =>
-          "Google did not complete that sign-in. Have another go, or use "
-              "email and password.",
+          "Google did not complete that sign-in. Have another go in a "
+              "moment.",
       };
     }
 
@@ -434,55 +388,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-
-  /// Confirms a new account with the six-digit code from the email.
-  ///
-  /// Returns null on success, or a sentence. Supabase issues a session on a
-  /// successful verify, so this is also the moment guest rows are adopted.
-  Future<String?> verifyEmailCode({
-    required String email,
-    required String code,
-  }) async {
-    final api = _auth;
-    if (api == null) return _noBackend;
-    try {
-      final res = await api.auth.verifyOTP(
-        type: OtpType.signup,
-        email: email,
-        token: code.trim(),
-      );
-      final id = res.user?.id;
-      if (id == null) {
-        return "That code did not work. Check the digits, or ask for a new "
-            "one.";
-      }
-      await _adopt(id, email: email, name: displayName);
-      return null;
-    } on AuthException catch (e) {
-      final m = e.message.toLowerCase();
-      if (m.contains('expired')) {
-        return "That code has expired. Ask for a new one.";
-      }
-      if (m.contains('invalid') || m.contains('token')) {
-        return "That code does not match. Check the digits, or ask for a new "
-            "one.";
-      }
-      return _humaniseAuth(e);
-    } catch (_) {
-      return _unreachable;
-    }
-  }
-
-  Future<String?> resendConfirmation(String email) async {
-    final api = _auth;
-    if (api == null) return _noBackend;
-    try {
-      await api.auth.resend(type: OtpType.signup, email: email);
-      return null;
-    } catch (_) {
-      return _unreachable;
-    }
-  }
 
   /// Signs out and clears this device.
   ///

@@ -9,9 +9,8 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/material.dart';
+import 'package:shelflife_app/core/widgets/app_widgets.dart';
 import 'package:shelflife_app/features/auth/screens/auth_screens.dart';
-import 'package:shelflife_app/features/auth/screens/verify_email_screen.dart';
 import 'package:shelflife_app/features/onboarding/screens/value_prop_screen.dart';
 
 import 'harness.dart';
@@ -38,84 +37,9 @@ void main() {
         matchesGoldenFile('goldens/04-welcome.png'));
   });
 
-  testWidgets('05 create account', (tester) async {
-    await pumpScreen(
-      tester,
-      _credentials(CredentialsMode.signUp),
-    );
-    await expectLater(find.byType(CredentialsScreen),
-        matchesGoldenFile('goldens/05-create-account.png'));
-  });
-
-  testWidgets('06 sign in', (tester) async {
-    await pumpScreen(
-      tester,
-      _credentials(CredentialsMode.signIn),
-    );
-    await expectLater(find.byType(CredentialsScreen),
-        matchesGoldenFile('goldens/06-sign-in.png'));
-  });
-
-  testWidgets('06 sign in with a recoverable problem', (tester) async {
-    await pumpScreen(
-      tester,
-      _credentials(
-        CredentialsMode.signIn,
-        problem: 'That email and password do not match. Try again, or reset '
-            'your password.',
-      ),
-    );
-    await expectLater(find.byType(CredentialsScreen),
-        matchesGoldenFile('goldens/06-sign-in-problem.png'));
-  });
-
-  testWidgets('07 verify email, empty', (tester) async {
-    await pumpScreen(tester, _verify());
-    await expectLater(find.byType(VerifyEmailScreen),
-        matchesGoldenFile('goldens/07-verify-email.png'));
-  });
-
-  testWidgets('07 verify email, wrong code', (tester) async {
-    await pumpScreen(
-      tester,
-      _verify(problem: 'That code does not match. Check the digits, or ask '
-          'for a new one.'),
-    );
-    await expectLater(find.byType(VerifyEmailScreen),
-        matchesGoldenFile('goldens/07-verify-email-wrong.png'));
-  });
-
-  testWidgets('submits on the sixth digit without a button press',
-      (tester) async {
-    // Reaching for a button after typing the last character of a code you just
-    // read is pure friction.
-    String? submitted;
-    await pumpScreen(
-      tester,
-      VerifyEmailScreen(
-        email: 'rakesh@example.com',
-        onVerify: (code) => submitted = code,
-        onBack: _noop,
-      ),
-    );
-    await tester.enterText(find.byType(TextField), '12345');
-    expect(submitted, isNull, reason: 'five digits is not a code yet');
-    await tester.enterText(find.byType(TextField), '123456');
-    expect(submitted, '123456');
-  });
-
-  testWidgets('only digits reach the code field', (tester) async {
-    await pumpScreen(tester, _verify());
-    await tester.enterText(find.byType(TextField), '12ab34');
-    expect(
-      tester.widget<TextField>(find.byType(TextField)).controller!.text,
-      '1234',
-      reason: 'letters would never match a numeric code',
-    );
-  });
-
   testWidgets('08 guest mode', (tester) async {
-    await pumpScreen(tester, const GuestModeScreen(onBack: _noop));
+    await pumpScreen(
+        tester, const GuestModeScreen(onBack: _noop, onGoogle: _noop));
     await expectLater(find.byType(GuestModeScreen),
         matchesGoldenFile('goldens/08-guest-mode.png'));
   });
@@ -129,15 +53,6 @@ void main() {
         matchesGoldenFile('goldens/04-welcome-google.png'));
   });
 
-  testWidgets('06 sign in with Google offered', (tester) async {
-    await pumpScreen(
-      tester,
-      _credentials(CredentialsMode.signIn, showGoogle: true),
-    );
-    await expectLater(find.byType(CredentialsScreen),
-        matchesGoldenFile('goldens/06-sign-in-google.png'));
-  });
-
   testWidgets('the Google button is absent when it cannot work', (tester) async {
     // An option that fails on tap is worse than an option that is not there.
     await pumpScreen(tester, _welcome());
@@ -145,13 +60,40 @@ void main() {
     expect(find.textContaining('Google'), findsNothing);
   });
 
+  testWidgets('guest becomes the primary action when Google cannot work',
+      (tester) async {
+    // Otherwise the screen has no button at all and reads as broken: with
+    // email sign-up gone, guest is the only way in.
+    await pumpScreen(tester, _welcome());
+    expect(find.widgetWithText(AppButton, 'Start cooking'), findsOneWidget);
+  });
+
+  testWidgets('nothing offers an email or password anywhere in auth',
+      (tester) async {
+    // The guard on the decision this replaced. Supabase cannot send a
+    // confirmation code on this project -- template editing needs custom SMTP,
+    // the default template has a link and no token, and the cap is two emails
+    // an hour -- so any surviving mention of email sign-up would be an offer
+    // the app cannot honour.
+    for (final screen in [
+      _welcome(showGoogle: true),
+      _welcome(),
+      const GuestModeScreen(onBack: _noop, onGoogle: _noop),
+    ]) {
+      await pumpScreen(tester, screen);
+      expect(find.textContaining('assword'), findsNothing);
+      expect(find.textContaining('Create an account'), findsNothing);
+      expect(find.textContaining('Email'), findsNothing);
+    }
+  });
+
   testWidgets('a Google problem is shown on the welcome screen', (tester) async {
     await pumpScreen(
       tester,
       _welcome(
         showGoogle: true,
-        problem: 'Google sign-in is not available on this phone. You can use '
-            'email and password instead.',
+        problem: 'Google sign-in is not available on this phone. You can '
+            'carry on without an account.',
       ),
     );
     await expectLater(find.byType(WelcomeScreen),
@@ -165,33 +107,7 @@ WelcomeScreen _welcome({bool showGoogle = false, String? problem}) =>
       showGoogle: showGoogle,
       problem: problem,
       onGoogle: _noop,
-      onCreateAccount: _noop,
-      onSignIn: _noop,
       onGuest: _noop,
-    );
-
-CredentialsScreen _credentials(
-  CredentialsMode mode, {
-  bool showGoogle = false,
-  String? problem,
-}) =>
-    CredentialsScreen(
-      mode: mode,
-      showGoogle: showGoogle,
-      problem: problem,
-      onBack: _noop,
-      onGoogle: _noop,
-      onSubmit: (_, _, _) {},
-      onSwitchMode: _noop,
-      onForgotPassword: _noop,
-    );
-
-VerifyEmailScreen _verify({String? problem}) => VerifyEmailScreen(
-      email: 'rakesh@example.com',
-      problem: problem,
-      onVerify: (_) {},
-      onBack: _noop,
-      onWrongEmail: _noop,
     );
 
 void _noop() {}

@@ -27,7 +27,6 @@ import 'core/services/platform_capabilities.dart';
 import 'core/theme/app_theme.dart';
 import 'database/local_store.dart';
 import 'database/sync_queue.dart';
-import 'features/auth/screens/auth_page.dart';
 import 'features/auth/screens/auth_screens.dart';
 import 'features/onboarding/screens/value_prop_screen.dart';
 import 'services/product_lookup.dart';
@@ -270,30 +269,31 @@ class _WelcomeState extends State<_Welcome> {
   }
 
   @override
-  Widget build(BuildContext context) => WelcomeScreen(
-        showGoogle: AppScope.of(context).canSignInWithGoogle,
-        googleBusy: _busy,
-        problem: _problem,
-        onGoogle: _google,
-        onCreateAccount: () => _auth(context, CredentialsMode.signUp),
-        onSignIn: () => _auth(context, CredentialsMode.signIn),
-        onGuest: () => Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (guestContext) => GuestModeScreen(
-            onBack: () => Navigator.of(guestContext).pop(),
-            onCreateAccount: () {
-              Navigator.of(guestContext).pop();
-              _auth(context, CredentialsMode.signUp);
-            },
-            onContinue: () async {
-              await AppScope.read(context).continueAsGuest();
-              if (guestContext.mounted) Navigator.of(guestContext).pop();
-            },
-          ),
-        )),
-      );
-
-  void _auth(BuildContext context, CredentialsMode mode) =>
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => AuthPage(mode: mode),
-      ));
+  Widget build(BuildContext context) {
+    final canGoogle = AppScope.of(context).canSignInWithGoogle;
+    return WelcomeScreen(
+      showGoogle: canGoogle,
+      googleBusy: _busy,
+      problem: _problem,
+      onGoogle: _google,
+      onGuest: () => Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (guestContext) => GuestModeScreen(
+          onBack: () => Navigator.of(guestContext).pop(),
+          // Popping first so the Google account sheet is not competing with a
+          // route transition, and so a cancelled sign-in leaves the user on
+          // the welcome screen rather than back on this explainer.
+          onGoogle: canGoogle
+              ? () {
+                  Navigator.of(guestContext).pop();
+                  _google();
+                }
+              : null,
+          onContinue: () async {
+            await AppScope.read(context).continueAsGuest();
+            if (guestContext.mounted) Navigator.of(guestContext).pop();
+          },
+        ),
+      )),
+    );
+  }
 }

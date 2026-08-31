@@ -67,32 +67,11 @@ class GoogleButton extends StatelessWidget {
 }
 
 /// A rule with a word in it, separating the two ways in.
-class OrDivider extends StatelessWidget {
-  const OrDivider({super.key, this.label = 'or'});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          const Expanded(child: Divider(color: T.structureDivider)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Text(label,
-                style: T.labelMedium12.copyWith(color: T.textSecondary)),
-          ),
-          const Expanded(child: Divider(color: T.structureDivider)),
-        ],
-      );
-}
-
 // ------------------------------------------------------------------ 04
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({
     super.key,
-    this.onCreateAccount,
-    this.onSignIn,
     this.onGuest,
     this.onGoogle,
     this.showGoogle = false,
@@ -100,19 +79,26 @@ class WelcomeScreen extends StatelessWidget {
     this.problem,
   });
 
-  final VoidCallback? onCreateAccount;
-  final VoidCallback? onSignIn;
   final VoidCallback? onGuest;
   final VoidCallback? onGoogle;
 
-  /// Hidden when the build has no OAuth client id. An option that cannot work
-  /// is worse than no option.
+  /// False when the build carries no OAuth client id, and then Google is not
+  /// offered at all: an option that cannot work is worse than no option. With
+  /// email sign-up gone this also means guest is the only way in, so the guest
+  /// action is promoted to the primary button rather than staying a footnote.
+  ///
+  /// Why email sign-up is gone: the Supabase project cannot send a
+  /// confirmation code. Template editing is gated behind custom SMTP, the
+  /// default template carries a link and no token, and the project-wide send
+  /// limit is two emails an hour. An email flow built on that would fail for
+  /// the third person to try it, so Google -- which sends no email -- is the
+  /// only account path.
   final bool showGoogle;
 
   final bool googleBusy;
 
-  /// Surfaced here because Google sign-in can fail on this screen, before any
-  /// form exists to attach a message to.
+  /// Surfaced here because Google sign-in can fail on this screen, and there
+  /// is no form left to attach a message to.
   final String? problem;
 
   @override
@@ -122,217 +108,56 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Spacer(flex: 2),
+              const Spacer(flex: 3),
               Center(
                 child: ArtHalo(
                   size: 200,
                   child: ProduceImage(glyphKey: 'avocado', size: 142),
                 ),
               ),
+              // Deliberately uneven: 3 above the art, 2 above the title, 1
+              // above the action. Removing two of this screen's three buttons
+              // left a void between the copy and the button, and an even split
+              // put the action adrift from the sentence that motivates it.
               const Spacer(flex: 2),
-              const ScreenTitle(
-                ['Your kitchen,', 'kept in mind'],
-                subtitle: 'Create an account to keep your kitchen across '
-                    'devices, or start straight away and sign up later.',
+              ScreenTitle(
+                const ['Your kitchen,', 'kept in mind'],
+                subtitle: showGoogle
+                    ? 'Sign in with Google to keep your kitchen on every '
+                        'device you use, or start straight away and stay on '
+                        'this phone.'
+                    : 'Your kitchen is kept on this phone. Everything works '
+                        'the same way; it just does not follow you to another '
+                        'device.',
               ),
-              const Spacer(flex: 2),
+              const Spacer(),
               if (showGoogle) ...[
                 GoogleButton(onPressed: onGoogle, busy: googleBusy),
-                const SizedBox(height: 16),
-                const OrDivider(),
-                const SizedBox(height: 16),
-              ],
-              AppButton(
-                label: 'Create an account',
-                onPressed: onCreateAccount,
-              ),
-              const SizedBox(height: 12),
-              AppButton.secondary(label: 'Sign in', onPressed: onSignIn),
-              if (problem != null) ...[
-                const SizedBox(height: 16),
-                _ProblemStrip(problem!),
-              ],
-              const SizedBox(height: 18),
-              Center(
-                child: TextButton(
-                  onPressed: onGuest,
-                  child: Text(
-                    'Continue without an account',
-                    style: T.labelMedium12.copyWith(color: T.accentPrimary),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      );
-}
-
-// ------------------------------------------------------------------ 05, 06
-
-/// One screen for both sign-in and sign-up. The two differ by a single field
-/// and the button copy; two files would drift.
-class CredentialsScreen extends StatefulWidget {
-  const CredentialsScreen({
-    super.key,
-    required this.mode,
-    this.onBack,
-    this.onSubmit,
-    this.onSwitchMode,
-    this.onForgotPassword,
-    this.onGoogle,
-    this.showGoogle = false,
-    this.busy = false,
-    this.problem,
-  });
-
-  final CredentialsMode mode;
-  final VoidCallback? onBack;
-  final void Function(String email, String password, String? name)? onSubmit;
-  final VoidCallback? onSwitchMode;
-  final VoidCallback? onForgotPassword;
-  final VoidCallback? onGoogle;
-
-  /// Hidden when the build has no OAuth client id.
-  final bool showGoogle;
-
-  final bool busy;
-
-  /// A recoverable problem, phrased as what to do next. Never the word the PRD
-  /// forbids — "That password does not match", not "Error".
-  final String? problem;
-
-  @override
-  State<CredentialsScreen> createState() => _CredentialsScreenState();
-}
-
-enum CredentialsMode { signUp, signIn }
-
-class _CredentialsScreenState extends State<CredentialsScreen> {
-  final _name = TextEditingController();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _email.dispose();
-    _password.dispose();
-    super.dispose();
-  }
-
-  bool get _isSignUp => widget.mode == CredentialsMode.signUp;
-
-  @override
-  Widget build(BuildContext context) => AppScreen(
-        child: Gutter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TopBar(onBack: widget.onBack),
-              const SizedBox(height: 16),
-              ScreenTitle(
-                _isSignUp
-                    ? const ['Create your', 'account']
-                    : const ['Welcome', 'back'],
-                subtitle: _isSignUp
-                    ? 'Your kitchen syncs across every device you sign in on.'
-                    : 'Sign in and your kitchen comes back exactly as it was.',
-              ),
-              const SizedBox(height: 28),
-              if (_isSignUp) ...[
-                AppTextField(
-                  label: 'Your name',
-                  hint: 'Rakesh',
-                  controller: _name,
-                  icon: Icons.person_outline,
-                  helper: 'Only used to greet you on the home screen.',
-                ),
+                if (problem != null) ...[
+                  const SizedBox(height: 16),
+                  _ProblemStrip(problem!),
+                ],
                 const SizedBox(height: 18),
-              ],
-              AppTextField(
-                label: 'Email',
-                hint: 'you@example.com',
-                controller: _email,
-                icon: Icons.mail_outline,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 18),
-              AppTextField(
-                label: 'Password',
-                hint: _isSignUp ? 'At least 8 characters' : null,
-                controller: _password,
-                icon: Icons.lock_outline,
-                obscure: true,
-                helper: _isSignUp
-                    ? 'Eight characters or more. A phrase is easier to '
-                        'remember than a jumble.'
-                    : null,
-              ),
-              if (!_isSignUp) ...[
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
+                Center(
                   child: TextButton(
-                    onPressed: widget.onForgotPassword,
-                    child: Text('Forgot your password?',
-                        style:
-                            T.labelMedium12.copyWith(color: T.accentPrimary)),
-                  ),
-                ),
-              ],
-              if (widget.problem != null) ...[
-                const SizedBox(height: 18),
-                _ProblemStrip(widget.problem!),
-              ],
-              const SizedBox(height: 28),
-              AppButton(
-                label: widget.busy
-                    ? 'One moment'
-                    : _isSignUp
-                        ? 'Create account'
-                        : 'Sign in',
-                onPressed: widget.busy
-                    ? null
-                    : () => widget.onSubmit?.call(
-                          _email.text.trim(),
-                          _password.text,
-                          _isSignUp ? _name.text.trim() : null,
-                        ),
-              ),
-              const SizedBox(height: 20),
-              Center(
-                child: TextButton(
-                  onPressed: widget.onSwitchMode,
-                  child: Text.rich(
-                    TextSpan(
-                      style: T.secondaryRegular13
-                          .copyWith(color: T.textSecondary),
-                      children: [
-                        TextSpan(
-                            text: _isSignUp
-                                ? 'Already have an account?  '
-                                : 'New here?  '),
-                        TextSpan(
-                          text: _isSignUp ? 'Sign in' : 'Create an account',
-                          style: T.labelMedium12
-                              .copyWith(color: T.accentPrimary),
-                        ),
-                      ],
+                    onPressed: onGuest,
+                    child: Text(
+                      'Continue without an account',
+                      style: T.labelMedium12.copyWith(color: T.accentPrimary),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
+              ] else
+                // Guest is the only way in, so it carries the primary button.
+                // A screen whose only action is a text link reads as broken.
+                AppButton(label: 'Start cooking', onPressed: onGuest),
+              const SizedBox(height: 20),
             ],
           ),
         ),
       );
 }
 
-/// A problem the user can act on. Amber rather than red: nothing has broken,
-/// something needs a correction.
 class _ProblemStrip extends StatelessWidget {
   const _ProblemStrip(this.text);
 
@@ -366,12 +191,16 @@ class GuestModeScreen extends StatelessWidget {
   const GuestModeScreen({
     super.key,
     this.onContinue,
-    this.onCreateAccount,
+    this.onGoogle,
     this.onBack,
   });
 
   final VoidCallback? onContinue;
-  final VoidCallback? onCreateAccount;
+
+  /// Null when the build has no OAuth client id, which hides the row: there is
+  /// then no alternative to offer.
+  final VoidCallback? onGoogle;
+
   final VoidCallback? onBack;
 
   /// Stated plainly and in both directions. A guest-mode screen that only lists
@@ -379,7 +208,7 @@ class GuestModeScreen extends StatelessWidget {
   static const _keeps = [
     'Everything works — scanning, recipes, reminders',
     'Your kitchen is stored on this phone',
-    'You can create an account later and keep what you added',
+    'You can sign in later and keep everything you added',
   ];
 
   static const _loses = [
@@ -419,10 +248,13 @@ class GuestModeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 28),
               AppButton(label: 'Continue this way', onPressed: onContinue),
-              const SizedBox(height: 12),
-              AppButton.secondary(
-                  label: 'Create an account instead',
-                  onPressed: onCreateAccount),
+              if (onGoogle != null) ...[
+                const SizedBox(height: 12),
+                AppButton.secondary(
+                  label: 'Sign in with Google instead',
+                  onPressed: onGoogle,
+                ),
+              ],
               const SizedBox(height: 24),
             ],
           ),

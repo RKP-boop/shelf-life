@@ -6,7 +6,6 @@ Flutter, offline-first, with a Supabase backend it never blocks on.
 - **Remaining setup (start here):** [`docs/FINISH-SETUP.md`](docs/FINISH-SETUP.md)
 - **Install and build:** [`INSTALL.md`](INSTALL.md)
 - **Google sign-in setup:** [`docs/google-sign-in-setup.md`](docs/google-sign-in-setup.md)
-- **Email verification setup:** [`docs/email-verification-setup.md`](docs/email-verification-setup.md)
 - **Every decision and its reasoning:** [`docs/superpowers/specs/2026-08-24-shelflife-mvp-design.md`](docs/superpowers/specs/2026-08-24-shelflife-mvp-design.md) — the decision log D1–D21 is the thing to read first
 - **Design system registry:** [`design/figma-v2.md`](design/figma-v2.md)
 

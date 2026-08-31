@@ -15,8 +15,6 @@ import '../core/engines/recipe_scorer.dart';
 import '../core/services/platform_capabilities.dart';
 import '../core/widgets/item_row.dart';
 import '../features/capture/widgets/live_viewfinders.dart';
-import '../features/auth/screens/auth_page.dart';
-import '../features/auth/screens/auth_screens.dart';
 import '../features/capture/screens/barcode_screens.dart';
 import '../features/capture/screens/receipt_screens.dart';
 import '../features/dashboard/screens/home_states.dart';
@@ -95,10 +93,22 @@ abstract final class Flows {
   static void openSyncStatus(BuildContext context) =>
       _push<void>(context, const _SyncStatusRoute());
 
-  static void openSignUp(BuildContext context) => _push<void>(
-        context,
-        const AuthPage(mode: CredentialsMode.signUp),
-      );
+  /// Starts Google sign-in from inside the shell, where a guest taps the
+  /// account row.
+  ///
+  /// No screen of its own: there is one button-shaped decision left, and a
+  /// route that exists only to hold it would be a wrapper around a system
+  /// sheet. Failure lands in a snackbar because the row the user tapped is
+  /// still on screen behind the sheet, and success needs no message -- the
+  /// profile rebuilds with their name on it.
+  static Future<void> signInWithGoogle(BuildContext context) async {
+    final app = AppScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final problem = await app.signInWithGoogle();
+    if (problem != null) {
+      messenger.showSnackBar(SnackBar(content: Text(problem)));
+    }
+  }
 
   static Future<void> confirmSignOut(BuildContext context) async {
     final app = AppScope.read(context);

@@ -33,7 +33,7 @@ class ProfileScreen extends StatelessWidget {
     this.onAccount,
     this.onAbout,
     this.onSignOut,
-    this.onCreateAccount,
+    this.onSignIn,
   });
 
   final String displayName;
@@ -48,7 +48,7 @@ class ProfileScreen extends StatelessWidget {
   final VoidCallback? onAccount;
   final VoidCallback? onAbout;
   final VoidCallback? onSignOut;
-  final VoidCallback? onCreateAccount;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) => AppScreen(
@@ -108,11 +108,12 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 10),
               _SettingRow(
                 icon: Icons.person_outline,
-                label: isGuest ? 'Create an account' : 'Account',
+                label: isGuest ? 'Sign in' : 'Account',
                 detail: isGuest
                     ? 'Keep your kitchen across devices'
-                    : 'Email, password, your data',
-                onTap: isGuest ? onCreateAccount : onAccount,
+                    // No password to mention: Google is the only way in.
+                    : 'Your account and your data',
+                onTap: isGuest ? onSignIn : onAccount,
               ),
               const SizedBox(height: 10),
               _SettingRow(

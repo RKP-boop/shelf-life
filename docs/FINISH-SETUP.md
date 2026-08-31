@@ -1,15 +1,26 @@
-# Finishing setup — three tasks
+# Finishing setup — two tasks
 
-Everything in the app is built. These three need your accounts and your
-password, which is why they are not automated.
-
-Do them in this order. Task 1 produces the fingerprint task 2 needs.
+Everything else is done. What remains needs your password and your Google
+account, which is why it is not automated.
 
 | | Task | Time | Fixes |
 |---|---|---|---|
-| 1 | Create a signing key and push it to CI | ~4 min | Updatable builds, and a stable certificate for Google |
-| 2 | Register that certificate with Google | ~2 min | Google sign-in |
-| 3 | Add the OTP token to the Supabase email | ~2 min | The sign-up code actually arriving |
+| 1 | Create a signing key | ~2 min, one command | Updatable builds, and a stable certificate for Google |
+| 2 | Register that certificate with Google | ~2 min, in the browser | Google sign-in |
+
+Task 1 produces the fingerprint task 2 needs, so do them in order.
+
+## What changed since the last version of this file
+
+The third task — adding `{{ .Token }}` to the Supabase email template — is
+**gone, because it is impossible on this project.** Supabase gates template
+editing behind custom SMTP, so the Confirm-signup template cannot be changed,
+and the default one contains a link with no code. The project-wide send limit
+is also 2 emails per hour, and that field is locked as well.
+
+Email sign-up has therefore been removed from the app entirely. Google
+sign-in sends no email, so it is unaffected. Guest mode still works with no
+account at all. See decision D25 in the design spec.
 
 ---
 
@@ -17,91 +28,67 @@ Do them in this order. Task 1 produces the fingerprint task 2 needs.
 
 ### Why
 
-Android will not let one app be updated by a build signed with a different
-key. Right now CI signs with a throwaway debug key that GitHub's runner
-generates itself, so every build is effectively a different app — and Google
-binds an OAuth client to one certificate, which is why sign-in fails.
+Android refuses to update an app when the new build is signed with a different
+key, and Google binds an OAuth client to exactly one certificate. Right now CI
+signs with a throwaway debug key that the GitHub runner generates itself, so
+every build is effectively a different app and Google sign-in cannot work no
+matter what you register.
 
-**Keep the file you create forever.** Lose it and you can never update the
-installed app; users would have to uninstall and reinstall, losing local data.
-
-### 1.1 Create the keystore
-
-Open a terminal in the project and run this. `keytool` is not on your PATH, so
-use the full path:
+### Run this
 
 ```bash
-"/c/Program Files/Microsoft/jdk-17.0.20.101-hotspot/bin/keytool" -genkey -v \
-  -keystore "$HOME/shelflife-release.jks" \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias shelflife
+python tools/setup_signing.py
 ```
 
-It will prompt you:
+Run it yourself rather than asking me to. It prompts for a password, and a
+password should not pass through an agent or a chat transcript. Everything
+either side of that one prompt is automated: it creates the keystore, writes
+`android/key.properties`, uploads four encrypted secrets to GitHub, and prints
+the fingerprint.
 
-| Prompt | What to enter |
-|---|---|
-| `Enter keystore password` | **Choose a password. Write it down somewhere safe.** Minimum 6 characters. Nothing is echoed as you type — that is normal |
-| `Re-enter new password` | The same one |
-| `What is your first and last name?` | Your name, or press Enter |
-| The next five questions (unit, organisation, city, state, country) | Press Enter to skip each — none of them matter for a private app |
-| `Is CN=..., correct?` | Type `yes` |
-| `Enter key password for <shelflife>` | **Press Enter** to reuse the keystore password. Simpler, and the tooling assumes it |
-
-`-validity 10000` is about 27 years. Google Play requires a key valid past
-2033; this comfortably clears it.
-
-### 1.2 Point the build at it
-
-Create the file `shelflife_app/android/key.properties` with this content,
-substituting your password and your Windows username:
-
-```properties
-storePassword=YOUR_PASSWORD_HERE
-keyPassword=YOUR_PASSWORD_HERE
-keyAlias=shelflife
-storeFile=C:/Users/rakes/shelflife-release.jks
-```
-
-Two things that catch people out:
-
-- **Forward slashes** in `storeFile`, even on Windows. Backslashes are escape
-  characters in a properties file.
-- Both passwords are the same if you pressed Enter at the key-password prompt.
-
-This file is gitignored and never committed. Neither is the `.jks`.
-
-### 1.3 Push it to CI
-
-```bash
-python tools/upload_signing_secrets.py
-```
-
-This reads `key.properties`, base64-encodes the keystore, and uploads four
-encrypted secrets to GitHub. **The password is read from the file and never
-printed**, so it stays out of your terminal history and out of this
-conversation.
-
-You should see:
+It will ask:
 
 ```
-  ANDROID_KEYSTORE_BASE64      created
-  ANDROID_KEYSTORE_PASSWORD    created
-  ANDROID_KEY_PASSWORD         created
-  ANDROID_KEY_ALIAS            created
+  Password (6+ characters):
+  Again:
 ```
 
-Confirm they landed:
+Nothing echoes as you type — that is normal, not a frozen terminal. **Write
+the password down somewhere safe.** You need it to build again.
+
+Expected output:
+
+```
+  1/4  creating the keystore
+       C:\Users\rakes\shelflife-release.jks  (2.6 KB)
+  2/4  writing android/key.properties
+  3/4  uploading encrypted secrets to GitHub
+       ANDROID_KEYSTORE_BASE64      created
+       ANDROID_KEYSTORE_PASSWORD    created
+       ANDROID_KEY_PASSWORD         created
+       ANDROID_KEY_ALIAS            created
+  4/4  reading the certificate fingerprint
+
+  Release SHA-1
+
+    AA:BB:CC:...
+```
+
+Copy that SHA-1 — task 2 needs it. It is not a secret; it is a public
+certificate hash.
+
+### Two things worth knowing
+
+**Back up `~/shelflife-release.jks`.** It cannot be regenerated. Without it
+the installed app can never be updated, only uninstalled and replaced, which
+loses whatever the user had stored locally. The script refuses to overwrite an
+existing keystore for exactly this reason.
+
+**The keystore and `key.properties` are both gitignored** and never committed.
+The password reaches GitHub only as a sealed-box encrypted secret.
+
+Verify the secrets landed:
 <https://github.com/RKP-boop/shelf-life/settings/secrets/actions>
-
-### 1.4 Get the fingerprint
-
-```bash
-python tools/signing_fingerprints.py
-```
-
-Copy the **release** SHA-1 it prints — a colon-separated hex string. Task 2
-needs it.
 
 ---
 
@@ -109,66 +96,26 @@ needs it.
 
 <https://console.cloud.google.com/apis/credentials?project=shelflife-507111>
 
-1. Under **OAuth 2.0 Client IDs**, click your **Android** client (the one that
-   is *not* the Web client)
-2. Find **SHA-1 certificate fingerprint**
-3. **Add fingerprint** — paste the release SHA-1 from step 1.4
-4. Leave the existing debug fingerprint in place. A client can hold several,
-   and keeping it means local debug builds keep working
+1. Under **OAuth 2.0 Client IDs**, click the **Android** client — the one that
+   is *not* the Web client
+2. Find **SHA-1 certificate fingerprint** → **Add fingerprint**
+3. Paste the release SHA-1 from task 1
+4. Leave the existing debug fingerprint in place. One client holds several, and
+   keeping it means local debug builds keep working
 5. Check **Package name** reads exactly `com.shelflife.app`
 6. **Save**
 
-Changes can take a few minutes to propagate. If sign-in fails immediately
-after saving, wait five minutes and try again before assuming something is
-wrong.
+Give it five minutes to propagate before concluding it did not work.
 
-### While you are there
-
-If the OAuth consent screen is still in **Testing**, only accounts you have
-listed can sign in — which looks exactly like a broken app to anyone else.
+### Also check the consent screen
 
 <https://console.cloud.google.com/auth/audience?project=shelflife-507111>
 
-Either add the accounts you plan to test with under **Test users**, or publish
-the app. Publishing an app that only requests basic profile scopes does not
-require Google's verification review.
-
----
-
-## Task 3 — Make the sign-up code arrive
-
-<https://supabase.com/dashboard/project/iodzysmxzjfqbrvktzgc/auth/templates>
-
-Select **Confirm signup** and replace the template body with this:
-
-```html
-<h2>Confirm your ShelfLife account</h2>
-
-<p>Your code is:</p>
-
-<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{ .Token }}</p>
-
-<p>Enter it in the app. It expires in an hour.</p>
-
-<p style="color:#5C6B64;font-size:13px">
-  If you did not sign up for ShelfLife, you can ignore this email.
-</p>
-```
-
-Then **Save**. Supabase silently keeps the old template if you navigate away
-without saving, so confirm the change stuck by reopening the page.
-
-`{{ .Token }}` is the six-digit code. The default template only contains a
-confirmation *link*, which is why no code was arriving — the app asks for
-digits that were never sent.
-
-### Why a code rather than the link
-
-Tapping the link opens a browser. The account is confirmed there, but the app
-never finds out and waits on the code screen indefinitely. Making a link
-return to the app needs an Android App Link: a domain you control, a verified
-`assetlinks.json` hosted on it, and manifest intent filters. A code closes the
-loop without leaving the app.
+If it is still in **Testing**, only accounts listed under **Test users** can
+sign in, and to everyone else the app looks broken rather than restricted.
+Either add the accounts you plan to test with, or publish — publishing an app
+that requests only basic profile scopes does not need Google's verification
+review.
 
 ---
 
@@ -176,15 +123,14 @@ loop without leaving the app.
 
 <https://github.com/RKP-boop/shelf-life/actions/workflows/build-apk.yml>
 
-**Run workflow** → **Run workflow**.
+**Run workflow** → **Run workflow**. Roughly 8 minutes.
 
-Roughly 8 minutes. When it finishes, check the **Report the signing
-fingerprint** step in the log: it prints the certificate that actually signed
-the APK. It should match what you registered in task 2, and there should be no
-"Debug-signed" warning.
+When it finishes, open the **Report the signing fingerprint** step in the log.
+It prints the certificate that actually signed the APK. It must match what you
+registered in task 2, and there must be no "Debug-signed" warning.
 
-Download **shelflife-apk** from the run's **Artifacts** section, unzip, and
-install `shelflife.apk`.
+Download **shelflife-apk** from the run's **Artifacts**, unzip, install
+`shelflife.apk`.
 
 ---
 
@@ -192,13 +138,13 @@ install `shelflife.apk`.
 
 | Check | Where |
 |---|---|
-| Google sign-in | Welcome screen → **Continue with Google** → pick an account → lands in the app |
-| Email sign-up | **Create an account** → a six-digit code arrives → entering it signs you in |
+| Google sign-in | Welcome → **Continue with Google** → pick an account → lands in the app |
+| Guest mode | Welcome → **Continue without an account** → the explainer → **Continue this way** |
 | Receipt scanner | Home → **Photograph a receipt** → a live camera preview, not a dark rectangle |
 | Gallery import | On the camera screen, the photo icon bottom-left opens your photo picker |
 | Barcode lookup | Scan any packaged product — it should name it rather than asking you to |
 
-If Google sign-in still fails after all three tasks, the fingerprint is the
-thing to re-check first. Compare the CI log's **Report the signing
-fingerprint** output against what Google Cloud lists, character by character.
-That mismatch is the cause in almost every case.
+If Google sign-in still fails, the fingerprint is the first thing to re-check.
+Compare the CI log's **Report the signing fingerprint** output against what
+Google Cloud lists, character by character. That mismatch is the cause in
+almost every case.
