@@ -4,8 +4,8 @@
 
 | File | Key | Status |
 |---|---|---|
-| ShelfLife — Premium UI v2 | `COwU4NcifaHygTqCHUliS8` | **Active** |
-| ShelfLife — MVP Screens (v1, olive) | `tHUZoQJZ7mnx7ibEcxrPZD` | Superseded |
+| ShelfLife — Premium UI v2 | `COwU4NcifaHygTqCHUliS8` | Component library only — no screen frames |
+| ShelfLife — MVP Screens | `tHUZoQJZ7mnx7ibEcxrPZD` | **Active — the screens live here.** See the correction at the end of this file |
 | ShelfLife — MVP User Flows (FigJam) | `VtBS3Rn1WMO9kUvXWkVdV1` | Read-only source of the 9 flows |
 
 URL: https://www.figma.com/design/COwU4NcifaHygTqCHUliS8
@@ -331,3 +331,23 @@ content for the Flutter build is therefore taken from the spec and the FigJam
 flow board (`VtBS3Rn1WMO9kUvXWkVdV1`), which are the authoritative content
 sources in any case. Screen layout is verified instead by committed golden
 renders under `shelflife_app/test/screens/goldens/`.
+
+## Correction 2026-08-31 — which file is actually being designed in
+
+The table at the top of this file is wrong, and it cost time twice.
+
+`tHUZoQJZ7mnx7ibEcxrPZD` — labelled "v1, olive, Superseded" — is the file the
+screens actually live in and the one being edited. `11:83` is `01 Value prop`,
+carrying the current copy ("Let's make your kitchen remember"). The 52 frames
+were never in `COwU4NcifaHygTqCHUliS8`; that file holds only the component
+library, which is what the earlier "discrepancy" note was really recording.
+
+**The API also serves a stale render of that file.** Requesting `11:83` returns
+the deep-olive vector version — dark background, an outlined fridge built from
+ellipses, cream pill buttons — while the editor shows the restyled pastel
+screen with a photorealistic 3D fridge. `download_assets` reports
+`rawImages: []`, so the placed artwork is not visible through the API at all.
+
+Practical consequence: **art has to be exported by hand** from Figma and
+dropped into `shelflife_app/assets/`. Reading layout and copy through the API
+is fine; fetching images is not.
