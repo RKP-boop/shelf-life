@@ -37,6 +37,14 @@ FORBIDDEN = {
 EXPECTED_STRINGS = {
     "publishable key": rb"sb_publishable_",
     "Supabase project URL": rb"supabase\.co",
+    # Google sign-in is the only account path in the app (decision D25), so a
+    # build without this define is not a build with one feature missing -- it is
+    # a build nobody can sign into. It would install, run, and look fine: the
+    # welcome screen hides the Google button when the id is absent, on the
+    # principle that an option which cannot work is worse than no option. That
+    # same kindness makes the failure invisible, which is why it belongs here
+    # rather than in a runtime check.
+    "Google OAuth client id": rb"\.apps\.googleusercontent\.com",
 }
 
 # The launcher activity named in the manifest must actually exist in the dex.
