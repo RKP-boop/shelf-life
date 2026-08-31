@@ -239,7 +239,28 @@ class GoogleCredential {
 ///
 /// `cancelled` is separate from the rest because it is not a failure: the user
 /// backed out, and showing them a message about it would be wrong.
-enum GoogleAuthOutcome { cancelled, notConfigured, unavailable, refused }
+enum GoogleAuthOutcome {
+  cancelled,
+
+  /// The build carries no OAuth client id at all.
+  notConfigured,
+
+  /// Play Services missing, no activity to show UI on, or a platform that has
+  /// no native flow.
+  unavailable,
+
+  /// The build has a client id, but Google rejects it -- almost always because
+  /// the signing certificate of this APK is not registered against the Android
+  /// OAuth client.
+  ///
+  /// Distinct from [refused] because the two need opposite advice. A refused
+  /// attempt is worth retrying; a misconfigured one never will be, and telling
+  /// someone to have another go is worse than telling them nothing.
+  misconfigured,
+
+  /// Something went wrong that a second attempt might fix.
+  refused,
+}
 
 class GoogleAuthResult {
   const GoogleAuthResult.success(this.credential) : outcome = null;

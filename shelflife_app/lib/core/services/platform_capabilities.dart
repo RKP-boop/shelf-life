@@ -457,6 +457,14 @@ class NativeGoogleAuthService implements GoogleAuthService {
           GoogleSignInExceptionCode.canceled => GoogleAuthOutcome.cancelled,
           GoogleSignInExceptionCode.uiUnavailable =>
             GoogleAuthOutcome.unavailable,
+          // These two are what an unregistered signing certificate looks like
+          // from here, and they were previously folded into `refused` -- so the
+          // app told people to try again when no number of attempts could ever
+          // work. It is the single most likely way Google sign-in fails in a
+          // fresh build, and it deserves its own answer.
+          GoogleSignInExceptionCode.clientConfigurationError ||
+          GoogleSignInExceptionCode.providerConfigurationError =>
+            GoogleAuthOutcome.misconfigured,
           _ => GoogleAuthOutcome.refused,
         },
       );

@@ -46,6 +46,37 @@ class AppScope extends InheritedNotifier<AppState> {
   }
 }
 
+/// The sentence to show for a failed Google sign-in, or null to say nothing.
+///
+/// Top-level and pure so it can be tested directly. `signInWithGoogle` returns
+/// early when there is no Supabase client, which made this mapping unreachable
+/// from any test that used the offline fakes -- and an untested mapping is
+/// where "have another go in a moment" survived on a failure that retrying can
+/// never fix.
+String? googleSignInProblem(GoogleAuthOutcome outcome) => switch (outcome) {
+      // The user changed their mind. Saying anything would be noise.
+      GoogleAuthOutcome.cancelled => null,
+
+      // Email sign-up is gone, so none of these may name it as a fallback.
+      GoogleAuthOutcome.notConfigured =>
+        "Google sign-in is not set up in this build. You can carry on without "
+            "an account.",
+      GoogleAuthOutcome.unavailable =>
+        "Google sign-in is not available on this phone. You can carry on "
+            "without an account.",
+
+      // Says it is not the user's fault and not worth retrying, and names the
+      // cause precisely enough that whoever built the APK knows where to look.
+      GoogleAuthOutcome.misconfigured =>
+        "Google sign-in is not set up for this build - its signing "
+            "certificate is not registered. You can carry on without an "
+            "account.",
+
+      // The only one a second attempt might actually fix.
+      GoogleAuthOutcome.refused =>
+        "Google did not complete that sign-in. Have another go in a moment.",
+    };
+
 class AppState extends ChangeNotifier {
   AppState({
     required this.store,
@@ -352,22 +383,7 @@ class AppState extends ChangeNotifier {
     if (api == null) return _noBackend;
 
     final result = await capabilities.googleAuth.signIn();
-    if (!result.ok) {
-      return switch (result.outcome!) {
-        GoogleAuthOutcome.cancelled => null,
-        // No fallback to suggest any more, so each of these says what to do
-        // instead of naming a path that no longer exists.
-        GoogleAuthOutcome.notConfigured =>
-          "Google sign-in is not set up in this build. You can carry on "
-              "without an account.",
-        GoogleAuthOutcome.unavailable =>
-          "Google sign-in is not available on this phone. You can carry on "
-              "without an account.",
-        GoogleAuthOutcome.refused =>
-          "Google did not complete that sign-in. Have another go in a "
-              "moment.",
-      };
-    }
+    if (!result.ok) return googleSignInProblem(result.outcome!);
 
     try {
       final credential = result.credential!;

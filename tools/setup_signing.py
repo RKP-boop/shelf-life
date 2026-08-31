@@ -5,7 +5,8 @@ Run this yourself rather than having it run for you: it asks for a password,
 and a password should not pass through an agent, a chat transcript, or your
 shell history. Everything either side of that one prompt is automated.
 
-    python tools/setup_signing.py
+    python tools/setup_signing.py                      # prompts for a password
+    python tools/setup_signing.py --generate-password  # mints a random one
 
 What it does, in order:
 
@@ -32,6 +33,7 @@ import base64
 import getpass
 import pathlib
 import re
+import secrets
 import subprocess
 import sys
 
@@ -57,6 +59,21 @@ NL = chr(10)
 
 def die(message: str) -> None:
     raise SystemExit(NL + '  ' + message + NL)
+
+
+def generate_password() -> str:
+    """Mints the keystore password instead of asking for one.
+
+    Legitimate because this is a build credential, not a personal one: it
+    protects a signing key that lives in a gitignored file and in GitHub's
+    encrypted secret store, and nothing else in the world uses it. A random 32
+    characters is stronger than anything a person would choose and type twice,
+    and it means the password never has to travel through a terminal, a
+    transcript, or somebody's memory.
+
+    secrets.token_urlsafe, not random: this seeds from the OS entropy pool.
+    """
+    return secrets.token_urlsafe(24)
 
 
 def ask_password() -> str:
@@ -133,7 +150,7 @@ def upload() -> None:
 
     props = up.read_properties()
     jks = up.keystore_path(props)
-    secrets = {
+    payload = {
         'ANDROID_KEYSTORE_BASE64': base64.b64encode(jks.read_bytes()).decode(),
         'ANDROID_KEYSTORE_PASSWORD': props['storePassword'],
         'ANDROID_KEY_PASSWORD': props['keyPassword'],
@@ -144,7 +161,7 @@ def upload() -> None:
                     tok)
     box = public.SealedBox(
         public.PublicKey(key['key'].encode(), encoding.Base64Encoder()))
-    for name, value in secrets.items():
+    for name, value in payload.items():
         sealed = base64.b64encode(box.encrypt(value.encode())).decode()
         status, _ = up.api(
             'PUT', '/repos/' + up.REPO + '/actions/secrets/' + name, tok,
@@ -167,7 +184,14 @@ def main() -> int:
               'install signed with it.' + NL
             + '  To reuse it: python tools/upload_signing_secrets.py')
 
-    password = ask_password()
+    generated = '--generate-password' in sys.argv
+    if generated:
+        password = generate_password()
+        print('Generating the keystore password rather than asking for one.')
+        print('It is written to android/key.properties and uploaded to GitHub')
+        print('as an encrypted secret. Nothing else uses it.' + NL)
+    else:
+        password = ask_password()
 
     print(NL + '  1/4  creating the keystore')
     create_keystore(tool, password)
@@ -196,6 +220,11 @@ def main() -> int:
         print(NL + '  The keystore and secrets are done, but the fingerprint')
         print('  could not be read. Get it with:')
         print('    python tools/signing_fingerprints.py')
+    if generated:
+        print(NL + '  The password is the storePassword line in')
+        print('  shelflife_app/android/key.properties. Copy it into a password')
+        print('  manager: that file is gitignored, so a fresh clone will not')
+        print('  have it, and without it the keystore cannot be reused.')
     print(NL + '  Back up ' + str(KEYSTORE) + ' somewhere safe.')
     print('  It cannot be regenerated, and without it the app can never be')
     print('  updated -- only uninstalled and replaced.' + NL)
