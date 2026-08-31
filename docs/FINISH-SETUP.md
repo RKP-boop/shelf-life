@@ -34,11 +34,26 @@ signs with a throwaway debug key that the GitHub runner generates itself, so
 every build is effectively a different app and Google sign-in cannot work no
 matter what you register.
 
+### Already confirmed working, so not on your list
+
+- **Supabase has the Google provider enabled.** Verified against
+  `/auth/v1/settings`: `external.google = true`.
+- **The build carries the OAuth client id.** `tools/audit_apk.py` now fails the
+  artefact if it does not, so this cannot silently regress.
+- **The sign-in code is correct** for `google_sign_in` 7.x — the web client id
+  passed as `serverClientId`, `authenticate()`, `authentication.idToken`.
+
+That leaves the signing certificate as the only remaining cause.
+
 ### Run this
 
 ```bash
-python tools/setup_signing.py
+python tools/setup_signing.py --generate-password
 ```
+
+`--generate-password` mints a random 32-character password instead of asking
+for one, and writes it to `android/key.properties`. Drop the flag to choose
+your own. Either way the password never appears in the terminal.
 
 Run it yourself rather than asking me to. It prompts for a password, and a
 password should not pass through an agent or a chat transcript. Everything
