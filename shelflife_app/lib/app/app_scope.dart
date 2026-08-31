@@ -346,11 +346,16 @@ class AppState extends ChangeNotifier {
     if (api == null) return _noBackend;
     try {
       final res = await api.auth.signUp(email: email, password: password);
-      final id = res.user?.id;
-      if (id == null) {
+      if (res.user == null) {
         return "That did not go through. Check the address and try again.";
       }
-      await _adopt(id, email: email, name: name);
+      // Deliberately not adopting yet. The account is unconfirmed until the
+      // code is entered, and moving guest rows onto an account that may never
+      // be confirmed would strand them. Remember the name so the verify step
+      // can use it.
+      if (name != null && name.isNotEmpty) {
+        await store.meta.put('display_name', name);
+      }
       return null;
     } on AuthException catch (e) {
       return _humaniseAuth(e);
@@ -423,6 +428,45 @@ class AppState extends ChangeNotifier {
       await _adopt(id, email: credential.email, name: credential.displayName);
       return null;
     } on AuthException catch (e) {
+      return _humaniseAuth(e);
+    } catch (_) {
+      return _unreachable;
+    }
+  }
+
+
+  /// Confirms a new account with the six-digit code from the email.
+  ///
+  /// Returns null on success, or a sentence. Supabase issues a session on a
+  /// successful verify, so this is also the moment guest rows are adopted.
+  Future<String?> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    final api = _auth;
+    if (api == null) return _noBackend;
+    try {
+      final res = await api.auth.verifyOTP(
+        type: OtpType.signup,
+        email: email,
+        token: code.trim(),
+      );
+      final id = res.user?.id;
+      if (id == null) {
+        return "That code did not work. Check the digits, or ask for a new "
+            "one.";
+      }
+      await _adopt(id, email: email, name: displayName);
+      return null;
+    } on AuthException catch (e) {
+      final m = e.message.toLowerCase();
+      if (m.contains('expired')) {
+        return "That code has expired. Ask for a new one.";
+      }
+      if (m.contains('invalid') || m.contains('token')) {
+        return "That code does not match. Check the digits, or ask for a new "
+            "one.";
+      }
       return _humaniseAuth(e);
     } catch (_) {
       return _unreachable;

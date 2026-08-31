@@ -9,7 +9,9 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:shelflife_app/features/auth/screens/auth_screens.dart';
+import 'package:shelflife_app/features/auth/screens/verify_email_screen.dart';
 import 'package:shelflife_app/features/onboarding/screens/value_prop_screen.dart';
 
 import 'harness.dart';
@@ -66,14 +68,49 @@ void main() {
         matchesGoldenFile('goldens/06-sign-in-problem.png'));
   });
 
-  testWidgets('07 check your email', (tester) async {
+  testWidgets('07 verify email, empty', (tester) async {
+    await pumpScreen(tester, _verify());
+    await expectLater(find.byType(VerifyEmailScreen),
+        matchesGoldenFile('goldens/07-verify-email.png'));
+  });
+
+  testWidgets('07 verify email, wrong code', (tester) async {
     await pumpScreen(
       tester,
-      const CheckEmailScreen(
-          email: 'rakesh@example.com', onBack: _noop),
+      _verify(problem: 'That code does not match. Check the digits, or ask '
+          'for a new one.'),
     );
-    await expectLater(find.byType(CheckEmailScreen),
-        matchesGoldenFile('goldens/07-check-email.png'));
+    await expectLater(find.byType(VerifyEmailScreen),
+        matchesGoldenFile('goldens/07-verify-email-wrong.png'));
+  });
+
+  testWidgets('submits on the sixth digit without a button press',
+      (tester) async {
+    // Reaching for a button after typing the last character of a code you just
+    // read is pure friction.
+    String? submitted;
+    await pumpScreen(
+      tester,
+      VerifyEmailScreen(
+        email: 'rakesh@example.com',
+        onVerify: (code) => submitted = code,
+        onBack: _noop,
+      ),
+    );
+    await tester.enterText(find.byType(TextField), '12345');
+    expect(submitted, isNull, reason: 'five digits is not a code yet');
+    await tester.enterText(find.byType(TextField), '123456');
+    expect(submitted, '123456');
+  });
+
+  testWidgets('only digits reach the code field', (tester) async {
+    await pumpScreen(tester, _verify());
+    await tester.enterText(find.byType(TextField), '12ab34');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '1234',
+      reason: 'letters would never match a numeric code',
+    );
   });
 
   testWidgets('08 guest mode', (tester) async {
@@ -146,6 +183,14 @@ CredentialsScreen _credentials(
       onSubmit: (_, _, _) {},
       onSwitchMode: _noop,
       onForgotPassword: _noop,
+    );
+
+VerifyEmailScreen _verify({String? problem}) => VerifyEmailScreen(
+      email: 'rakesh@example.com',
+      problem: problem,
+      onVerify: (_) {},
+      onBack: _noop,
+      onWrongEmail: _noop,
     );
 
 void _noop() {}
