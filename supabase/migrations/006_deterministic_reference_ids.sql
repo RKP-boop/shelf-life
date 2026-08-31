@@ -35,54 +35,74 @@
 begin;
 
 -- ---------------------------------------------------------------- FKs
+--
+-- Discovered from the catalogue rather than listed by hand. The first version
+-- of this migration named eight constraints explicitly and missed
+-- ingredient_aliases, so the whole thing aborted on a foreign key violation.
+-- A list maintained by hand is a list that goes stale the next time a table is
+-- added; asking pg_constraint cannot miss one.
+--
+-- Each constraint is rebuilt with its existing on-delete behaviour preserved
+-- and `on update cascade` added, in a single ALTER so there is never a moment
+-- where the foreign key is absent.
 
-alter table recipe_ingredients
-  drop constraint recipe_ingredients_ingredient_id_fkey,
-  add constraint recipe_ingredients_ingredient_id_fkey
-    foreign key (ingredient_id) references ingredients (id)
-    on delete cascade on update cascade;
+do $$
+declare
+  fk  record;
+  def text;
+begin
+  for fk in
+    select con.oid,
+           con.conname,
+           con.confupdtype,
+           ns.nspname     as child_schema,
+           child.relname  as child_table,
+           parent.relname as parent_table
+      from pg_constraint con
+      join pg_class     child  on child.oid  = con.conrelid
+      join pg_namespace ns     on ns.oid     = child.relnamespace
+      join pg_class     parent on parent.oid = con.confrelid
+     where con.contype = 'f'
+       and parent.relname in ('ingredients', 'recipes')
+     order by child.relname, con.conname
+  loop
+    -- Already cascading: nothing to do, and rebuilding it would append a
+    -- second ON UPDATE clause.
+    if fk.confupdtype = 'c' then
+      continue;
+    end if;
 
-alter table recipe_ingredients
-  drop constraint recipe_ingredients_recipe_id_fkey,
-  add constraint recipe_ingredients_recipe_id_fkey
-    foreign key (recipe_id) references recipes (id)
-    on delete cascade on update cascade;
+    -- 'a' is NO ACTION, the default, which pg_get_constraintdef omits -- so
+    -- appending ON UPDATE CASCADE is safe. Anything else (restrict, set null,
+    -- set default) is a deliberate choice this migration should not silently
+    -- overwrite.
+    if fk.confupdtype <> 'a' then
+      raise exception
+        'constraint %.% on %.% has an unexpected on-update rule (%); refusing '
+        'to rewrite it',
+        fk.parent_table, fk.conname, fk.child_schema, fk.child_table,
+        fk.confupdtype;
+    end if;
 
-alter table inventory_items
-  drop constraint inventory_items_ingredient_id_fkey,
-  add constraint inventory_items_ingredient_id_fkey
-    foreign key (ingredient_id) references ingredients (id)
-    on delete set null on update cascade;
+    def := pg_get_constraintdef(fk.oid);
 
-alter table products
-  drop constraint products_ingredient_id_fkey,
-  add constraint products_ingredient_id_fkey
-    foreign key (ingredient_id) references ingredients (id)
-    on delete set null on update cascade;
+    -- A deferrable constraint puts its DEFERRABLE clause last, so appending
+    -- after it would be a syntax error. None here are, but failing loudly
+    -- beats emitting broken DDL.
+    if def ilike '%DEFERRABLE%' then
+      raise exception 'constraint % on %.% is deferrable; rewrite it by hand',
+        fk.conname, fk.child_schema, fk.child_table;
+    end if;
 
-alter table shopping_list_items
-  drop constraint shopping_list_items_ingredient_id_fkey,
-  add constraint shopping_list_items_ingredient_id_fkey
-    foreign key (ingredient_id) references ingredients (id)
-    on delete set null on update cascade;
+    execute format(
+      'alter table %I.%I drop constraint %I, add constraint %I %s '
+      'on update cascade',
+      fk.child_schema, fk.child_table, fk.conname, fk.conname, def);
 
-alter table shopping_list_items
-  drop constraint shopping_list_items_source_recipe_id_fkey,
-  add constraint shopping_list_items_source_recipe_id_fkey
-    foreign key (source_recipe_id) references recipes (id)
-    on delete set null on update cascade;
-
-alter table consumption_events
-  drop constraint consumption_events_ingredient_id_fkey,
-  add constraint consumption_events_ingredient_id_fkey
-    foreign key (ingredient_id) references ingredients (id)
-    on delete set null on update cascade;
-
-alter table consumption_events
-  drop constraint consumption_events_recipe_id_fkey,
-  add constraint consumption_events_recipe_id_fkey
-    foreign key (recipe_id) references recipes (id)
-    on delete set null on update cascade;
+    raise notice 'cascaded % on %.%',
+      fk.conname, fk.child_schema, fk.child_table;
+  end loop;
+end $$;
 
 -- ------------------------------------------------------------ rewrite
 
@@ -113,7 +133,27 @@ do $$
 declare
   bad_ingredients int;
   bad_recipes     int;
+  uncascaded      text;
 begin
+  -- The check that would have caught the first version of this migration: an
+  -- FK referencing a reference table that does not cascade on update is an FK
+  -- the rewrite step will trip over.
+  select string_agg(ns.nspname || '.' || child.relname || '.' || con.conname,
+                    ', ' order by con.conname)
+    into uncascaded
+    from pg_constraint con
+    join pg_class     child  on child.oid  = con.conrelid
+    join pg_namespace ns     on ns.oid     = child.relnamespace
+    join pg_class     parent on parent.oid = con.confrelid
+   where con.contype = 'f'
+     and parent.relname in ('ingredients', 'recipes')
+     and con.confupdtype <> 'c';
+
+  if uncascaded is not null then
+    raise exception 'these foreign keys still do not cascade on update: %',
+      uncascaded;
+  end if;
+
   select count(*) into bad_ingredients
     from ingredients where id <> md5(canonical_name)::uuid;
   select count(*) into bad_recipes
