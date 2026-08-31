@@ -30,24 +30,26 @@ class ValueProp {
   /// remove, then the payoff.
   static const all = [
     ValueProp(
-      title: ['Know what', 'needs using'],
-      body: 'ShelfLife keeps track of what is in your kitchen and how long it '
-          'has left, so nothing quietly goes off at the back of the fridge.',
-      glyphKey: 'spinach',
+      title: ["Let's make your", "kitchen remember"],
+      body: "What you bought, what is still good, and what to cook tonight.",
+      // TODO(art): awaiting onboard-fridge.png from Figma. Using the spinach
+      // render meanwhile so the screen does not regress to a placeholder.
+      glyphKey: "spinach",
       halo: T.tintMint,
     ),
     ValueProp(
-      title: ['Snap a receipt,', 'not a spreadsheet'],
-      body: 'Photograph the receipt and your shopping is in. Scan a barcode or '
-          'add something by hand when it is easier.',
-      glyphKey: 'tomato',
+      title: ["Scan once.", "That is it."],
+      body: "Photograph your receipt and your whole kitchen is logged in "
+          "about forty seconds.",
+      // TODO(art): awaiting onboard-receipt.png from Figma.
+      glyphKey: "tomato",
       halo: T.tintPeach,
     ),
     ValueProp(
-      title: ['Cook what is', 'about to turn'],
-      body: 'Recipes are ranked by what you already have and what needs using '
-          'first, so dinner decides itself.',
-      glyphKey: 'paneer',
+      title: ["Cook what is", "about to turn"],
+      body: "Recipes are ranked by what you already have and what needs using "
+          "first, so dinner decides itself.",
+      glyphKey: "paneer",
       halo: T.tintLemon,
     ),
   ];

@@ -25,7 +25,8 @@ void main() {
 
   for (var i = 0; i < ValueProp.all.length; i++) {
     testWidgets('0${i + 1} value prop $i', (tester) async {
-      await pumpScreen(tester, ValuePropScreen(index: i));
+      await pumpScreen(tester,
+          ValuePropScreen(index: i, onNext: _noop, onSkip: _noop));
       await expectLater(find.byType(ValuePropScreen),
           matchesGoldenFile('goldens/0${i + 1}-value-prop.png'));
     });
