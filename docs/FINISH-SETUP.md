@@ -1,7 +1,8 @@
 # Finishing setup — two tasks
 
-Everything else is done. What remains needs your password and your Google
-account, which is why it is not automated.
+Everything else is done. What remains needs a signing credential minted on
+your machine and a change to your Google Cloud project — two things an agent
+should not do unattended, and which the permission layer blocks accordingly.
 
 | | Task | Time | Fixes |
 |---|---|---|---|
@@ -55,21 +56,15 @@ python tools/setup_signing.py --generate-password
 for one, and writes it to `android/key.properties`. Drop the flag to choose
 your own. Either way the password never appears in the terminal.
 
-Run it yourself rather than asking me to. It prompts for a password, and a
-password should not pass through an agent or a chat transcript. Everything
-either side of that one prompt is automated: it creates the keystore, writes
+**Run it yourself rather than asking an agent to.** A signing credential is
+exactly the kind of thing that should not be minted on your behalf without you
+watching, and the permission layer here blocks it for that reason. Everything
+either side of the password is automated: it creates the keystore, writes
 `android/key.properties`, uploads four encrypted secrets to GitHub, and prints
 the fingerprint.
 
-It will ask:
-
-```
-  Password (6+ characters):
-  Again:
-```
-
-Nothing echoes as you type — that is normal, not a frozen terminal. **Write
-the password down somewhere safe.** You need it to build again.
+Without the flag it prompts instead. Nothing echoes as you type — that is
+normal, not a frozen terminal.
 
 Expected output:
 
