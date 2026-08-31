@@ -28,9 +28,10 @@ the app:
 
 ### An account is optional
 
-"Continue without an account" gives you the whole app. Your kitchen is stored
+"Continue without an account" gives you the whole app. If you do want one,
+**Google is the only way in** -- there is no email or password to remember. Your kitchen is stored
 on the phone. Nothing is sent anywhere, and nothing syncs — if you clear the
-app's data or switch phones, it is gone. You can create an account later and
+app's data or switch phones, it is gone. You can sign in with Google later and
 everything you already added comes with you.
 
 ---
@@ -43,17 +44,15 @@ Android will not install an unsigned app, and an app signed with the debug key
 cannot be updated later by one signed with a real key. Make the key once and
 keep it — losing it means every future version installs as a separate app.
 
-Run this yourself so the password stays yours:
+One command does all of it -- keystore, `key.properties`, the encrypted upload
+to GitHub Actions, and the fingerprint Google needs:
 
 ```bash
-keytool -genkey -v \
-  -keystore "$HOME/shelflife-release.jks" \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias shelflife
+python tools/setup_signing.py
 ```
 
-Then create `shelflife_app/android/key.properties` (gitignored, never
-committed):
+Run it yourself so the password stays yours; it prompts for it and never prints
+it. If you would rather do it by hand, the file it writes looks like this:
 
 ```properties
 storePassword=<the password you just chose>
@@ -132,25 +131,30 @@ SHA-1 you registered. The first CI APK was signed `65:43:FC:15…` while
 So: create the keystore, push it to Actions, register *its* SHA-1.
 
 ```bash
-# 1. create it (you choose the password; keep the file safe forever)
-keytool -genkey -v -keystore "$HOME/shelflife-release.jks"   -keyalg RSA -keysize 2048 -validity 10000 -alias shelflife
-
-# 2. write shelflife_app/android/key.properties (gitignored) pointing at it
-
-# 3. push it to Actions as encrypted secrets -- the password is read from the
-#    file and never printed
-python tools/upload_signing_secrets.py
-
-# 4. get the fingerprint and register it with the Android OAuth client
-python tools/signing_fingerprints.py
+# All four steps, one command. It prompts for the password (hidden), creates
+# the keystore, writes key.properties, uploads the encrypted secrets, and
+# prints the SHA-1 to register with the Android OAuth client.
+python tools/setup_signing.py
 ```
+
+Run it yourself rather than delegating it: the password should not pass through
+an agent or a chat transcript. The script refuses to overwrite an existing
+keystore, because the old certificate is the only thing that can sign an update
+to an already-installed app.
 
 ### Google sign-in
 
-Off by default. The button only appears when the build is given
+**The only account path.** Email sign-up was removed: the Supabase project
+cannot send a confirmation code -- template editing is gated behind custom
+SMTP, the default template carries a link and no token, and the send limit is
+two emails an hour project-wide. See decision D25.
+
+The button appears only when the build is given
 `--dart-define=GOOGLE_WEB_CLIENT_ID=...`, which needs two OAuth clients in
-Google Cloud and the provider enabled in Supabase first. Full steps, including
-the SHA-1 trap that breaks release builds:
+Google Cloud and the provider enabled in Supabase first. A build without it
+installs and runs and looks correct -- the welcome screen hides an option it
+cannot honour -- so `tools/audit_apk.py` fails the artefact rather than letting
+that ship. Full steps, including the SHA-1 trap that breaks release builds:
 [`docs/google-sign-in-setup.md`](docs/google-sign-in-setup.md).
 
 ### If the build fails with "An Application Control policy has blocked this file"
