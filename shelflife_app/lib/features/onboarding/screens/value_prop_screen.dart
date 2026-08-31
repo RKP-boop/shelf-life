@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/tokens.g.dart';
 import '../../../core/widgets/app_widgets.dart';
-import '../../../core/widgets/produce_image.dart';
 
 /// The content of one value prop. Held as data rather than three near-identical
 /// widget trees, so the layout can only be wrong once.
@@ -17,13 +16,23 @@ class ValueProp {
   const ValueProp({
     required this.title,
     required this.body,
-    required this.glyphKey,
+    required this.artAsset,
     required this.halo,
   });
 
   final List<String> title;
   final String body;
-  final String glyphKey;
+
+  /// A full asset path rather than a produce glyph key.
+  ///
+  /// The onboarding art is hero illustration, not a catalogue glyph: it has its
+  /// own aspect ratio, is shown far larger than any produce tile, and ships as
+  /// WebP because these are photographic renders that PNG compresses badly —
+  /// the fridge is 123 KB as WebP against 654 KB as PNG, with no visible
+  /// difference. Reusing ProduceImage here would have meant teaching the glyph
+  /// resolver about file extensions it otherwise never needs.
+  final String artAsset;
+
   final Color halo;
 
   /// Ordered as the arc the user actually travels: the problem, the effort we
@@ -32,24 +41,21 @@ class ValueProp {
     ValueProp(
       title: ["Let's make your", "kitchen remember"],
       body: "What you bought, what is still good, and what to cook tonight.",
-      // TODO(art): awaiting onboard-fridge.png from Figma. Using the spinach
-      // render meanwhile so the screen does not regress to a placeholder.
-      glyphKey: "spinach",
+      artAsset: "assets/onboarding/fridge.webp",
       halo: T.tintMint,
     ),
     ValueProp(
       title: ["Scan once.", "That is it."],
       body: "Photograph your receipt and your whole kitchen is logged in "
           "about forty seconds.",
-      // TODO(art): awaiting onboard-receipt.png from Figma.
-      glyphKey: "tomato",
+      artAsset: "assets/onboarding/receipt.webp",
       halo: T.tintPeach,
     ),
     ValueProp(
       title: ["Cook what is", "about to turn"],
       body: "Recipes are ranked by what you already have and what needs using "
           "first, so dinner decides itself.",
-      glyphKey: "paneer",
+      artAsset: "assets/produce/paneer.png",
       halo: T.tintLemon,
     ),
   ];
@@ -102,7 +108,22 @@ class ValuePropScreen extends StatelessWidget {
               child: ArtHalo(
                 size: 250,
                 colour: prop.halo,
-                child: ProduceImage(glyphKey: prop.glyphKey, size: 184),
+                // Sized by height, not a square box: the fridge is nearly
+                // square and the receipt is tall, and constraining both to the
+                // same height gives them equal presence as the user pages
+                // through. contain keeps each undistorted.
+                child: SizedBox(
+                  height: 212,
+                  child: Image.asset(
+                    prop.artAsset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) => Icon(
+                      Icons.eco_outlined,
+                      size: 84,
+                      color: T.accentPrimary.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
               ),
             ),
             const Spacer(flex: 3),
